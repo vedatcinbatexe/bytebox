@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package bytebox.execution.v1;
+
+option csharp_namespace = "Bytebox.Execution.Grpc";
+
+service ExecutionService {
+  // Queue code for execution and return the new run id
+  rpc CreateRun(CreateRunRequest) returns (CreateRunResponse);
+
+  // Get the current state of a run
+  rpc GetRun(GetRunRequest) returns (Run);
+
+  // Send the current state, then every update until the run is finished
+  rpc StreamRun(GetRunRequest) returns (stream Run);
+}
+
+message CreateRunRequest {
+  string language = 1;
+  string code = 2;
+  string stdin = 3;
+  string user_id = 4; // optional, empty for anonymous users
+}
+
+message CreateRunResponse {
+  string run_id = 1;
+}
+
+message GetRunRequest {
+  string run_id = 1;
+}
+
+message Run {
+  string id = 1;
+  string language = 2;
+  string status = 3; // queued | completed | timed_out | memory_exceeded | failed
+  optional int32 exit_code = 4;
+  string stdout = 5;
+  string stderr = 6;
+  bool truncated = 7;
+  int32 time_ms = 8;
+  string created_at = 9;  // ISO 8601
+  string finished_at = 10; // ISO 8601, empty until finished
+}

@@ -71,13 +71,16 @@ services:
 
   execution:
     restart: unless-stopped
-    build: ./services/execution
+    build:
+      context: . # repo root, so the build can read proto/
+      dockerfile: services/execution/Dockerfile
     environment:
       ConnectionStrings__Postgres: Host=postgres;Database=execution;Username=${POSTGRES_USER:-bytebox};Password=${POSTGRES_PASSWORD:-bytebox}
       ConnectionStrings__Redis: redis:6379
       RabbitMq__Url: amqp://${RABBITMQ_USER:-bytebox}:${RABBITMQ_PASSWORD:-bytebox}@rabbitmq:5672
     ports:
-      - '5002:8080'
+      - '5002:8080' # REST (/health)
+      - '50051:8081' # gRPC
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,7 +126,7 @@ services:
     environment:
       PORT: 4000
       IDENTITY_URL: http://identity:8080
-      EXECUTION_URL: http://execution:8080
+      EXECUTION_URL: http://execution:8081 # gRPC
       SNIPPET_URL: http://snippet:8000
       REDIS_URL: redis://redis:6379
     ports:

@@ -1,0 +1,8 @@
+# Used by services built with the repo root as context (e.g. execution)
+.git
+**/node_modules
+**/.next
+**/.venv
+**/__pycache__
+**/bin
+**/obj
