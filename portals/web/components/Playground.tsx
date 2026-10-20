@@ -7,6 +7,8 @@ import Editor, { type OnMount } from '@monaco-editor/react';
 import { DRAG_TYPE, FileTree } from './FileTree';
 import { OutputPanel, isFinished } from './OutputPanel';
 import { PreviewPanel } from './PreviewPanel';
+import { TestsPanel } from './TestsPanel';
+import { TESTS_FILE, parseTests, serializeTests } from '@/lib/tests';
 import { SearchPanel } from './SearchPanel';
 import { ResizeHandle } from './ResizeHandle';
 import { StatusBar } from './StatusBar';
@@ -59,7 +61,7 @@ import {
 const STORAGE_KEY = 'bytebox:workspace';
 
 const SECONDARY_BUTTON =
-  'rounded border border-line-strong px-2.5 py-1.5 text-sm text-fg hover:bg-raised disabled:cursor-not-allowed disabled:opacity-50';
+  'rounded border border-line-strong px-2.5 py-1.5 text-sm whitespace-nowrap text-fg hover:bg-raised disabled:cursor-not-allowed disabled:opacity-50';
 
 const ERROR_MESSAGES: Record<string, string> = {
   FORBIDDEN: 'Only the owner can save this project. Fork it to make your own copy.',
@@ -139,7 +141,7 @@ export function Playground({ slug }: Props) {
   const [ownerLogin, setOwnerLogin] = useState<string | null>(null);
   const [stars, setStars] = useState({ starCount: 0, starredByMe: false });
   const [cursor, setCursor] = useState<{ line: number; column: number } | null>(null);
-  const [asideTab, setAsideTab] = useState<'output' | 'preview'>('output');
+  const [asideTab, setAsideTab] = useState<'output' | 'tests' | 'preview'>('output');
   const [searchOpen, setSearchOpen] = useState(false);
   const [sizes, setSizes] = useState<PanelSizes>(DEFAULT_SIZES);
   useEffect(() => setSizes(loadSizes()), []);
@@ -689,7 +691,7 @@ export function Playground({ slug }: Props) {
         )}
 
         {/* Project: share / save / copy link / fork / download */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {slug && (
             <button
               onClick={async () => {
@@ -772,7 +774,7 @@ export function Playground({ slug }: Props) {
         <span className="hidden h-6 w-px bg-line md:block" aria-hidden="true" />
 
         {/* Tools */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => (terminalOpen ? setTerminalOpen(false) : canChange() && setTerminalOpen(true))}
             className={`${SECONDARY_BUTTON} ${terminalOpen ? 'bg-raised' : ''}`}
@@ -812,7 +814,7 @@ export function Playground({ slug }: Props) {
         <span className="hidden h-6 w-px bg-line md:block" aria-hidden="true" />
 
         {/* Theme and profile */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ThemePicker />
           <UserMenu user={user} loading={userLoading} />
         </div>
@@ -1009,24 +1011,36 @@ export function Playground({ slug }: Props) {
           className="flex min-h-80 shrink-0 flex-col bg-panel md:min-h-0 md:w-(--aside-w) md:max-w-[60vw]"
           style={{ '--aside-w': `${sizes.aside}px` } as React.CSSProperties}
         >
-          {pages.length > 0 && (
-            <div role="tablist" className="flex shrink-0 border-b border-line text-sm">
-              {(['output', 'preview'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  role="tab"
-                  aria-selected={asideTab === tab}
-                  onClick={() => setAsideTab(tab)}
-                  className={`border-b-2 px-4 py-2 ${
-                    asideTab === tab ? 'border-accent text-fg' : 'border-transparent text-muted hover:text-fg'
-                  }`}
-                >
-                  {tab === 'output' ? 'Output' : '👁 Preview'}
-                </button>
-              ))}
-            </div>
-          )}
-          {showPreview ? (
+          <div role="tablist" className="flex shrink-0 border-b border-line text-sm">
+            {(pages.length > 0 ? (['output', 'tests', 'preview'] as const) : (['output', 'tests'] as const)).map((tab) => (
+              <button
+                key={tab}
+                role="tab"
+                aria-selected={asideTab === tab}
+                onClick={() => setAsideTab(tab)}
+                className={`border-b-2 px-4 py-2 ${
+                  asideTab === tab ? 'border-accent text-fg' : 'border-transparent text-muted hover:text-fg'
+                }`}
+              >
+                {tab === 'output' ? 'Output' : tab === 'tests' ? '🧪 Tests' : '👁 Preview'}
+              </button>
+            ))}
+          </div>
+          {asideTab === 'tests' ? (
+            <TestsPanel
+              tests={parseTests(project.files)}
+              onChange={(tests) =>
+                setWorkspace((current) => ({
+                  ...current,
+                  project: updateFile(current.project, TESTS_FILE, serializeTests(tests)),
+                }))
+              }
+              entryFile={canRun ? activePath : null}
+              getFiles={() => Object.entries(currentInput().project.files).map(([path, content]) => ({ path, content }))}
+              canChange={canChange}
+              readOnly={!user}
+            />
+          ) : showPreview ? (
             <PreviewPanel files={project.files} htmlPath={previewPath!} />
           ) : (
             <>

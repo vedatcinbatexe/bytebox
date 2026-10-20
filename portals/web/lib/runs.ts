@@ -57,3 +57,20 @@ export function watchRun(
     onError,
   );
 }
+
+// Run code and wait for the final result (used by test cases)
+export async function runToCompletion(files: ProjectFile[], entryFile: string, stdin: string): Promise<Run> {
+  const created = await createRun(files, entryFile, stdin);
+  return new Promise((resolve, reject) => {
+    const close = watchRun(
+      created.id,
+      (update) => {
+        if (update.status !== 'QUEUED' && update.status !== 'RUNNING') {
+          close();
+          resolve(update);
+        }
+      },
+      reject,
+    );
+  });
+}
