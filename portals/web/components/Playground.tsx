@@ -90,7 +90,7 @@ const STARTER_WORKSPACE: Workspace = {
 function workspaceFor(saved: SavedProject): Workspace {
   const paths = Object.keys(saved.project.files).sort();
   const first =
-    paths.find((path) => /^(main\.(py|js|ts|cpp)|Main\.java)$/.test(path)) ??
+    paths.find((path) => /^(main\.(py|js|ts|cpp|go|rs)|Main\.java)$/.test(path)) ??
     paths.find((path) => path === 'index.html') ??
     paths.find((path) => runLanguage(path)) ??
     paths[0] ??
@@ -605,7 +605,7 @@ export function Playground({ slug }: Props) {
   async function runActiveFile() {
     if (running || !canChange()) return;
     if (!activePath || !runLanguage(activePath)) {
-      setError('Open a .py, .js, .ts, .java or .cpp file to run it.');
+      setError('Open a .py, .js, .ts, .java, .cpp, .go or .rs file to run it.');
       return;
     }
 
@@ -845,7 +845,7 @@ export function Playground({ slug }: Props) {
                 void runActiveFile();
               }}
               disabled={running || !canRun}
-              title={canRun ? 'Run the open file (⌘/Ctrl + Enter)' : 'Open a .py, .js, .ts, .java, .cpp or .html file'}
+              title={canRun ? 'Run the open file (⌘/Ctrl + Enter)' : 'Open a .py, .js, .ts, .java, .cpp, .go, .rs or .html file'}
               className="max-w-[50vw] truncate rounded bg-accent px-3.5 py-1.5 text-sm font-semibold text-accent-fg hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {running ? 'Running…' : `▶ Run ${canRun ? activePath : ''}`}

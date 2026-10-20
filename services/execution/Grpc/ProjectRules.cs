@@ -17,6 +17,8 @@ public static partial class ProjectRules
         [".ts"] = "typescript",
         [".java"] = "java",
         [".cpp"] = "cpp",
+        [".go"] = "go",
+        [".rs"] = "rust",
     };
 
     [GeneratedRegex(@"^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$")]
@@ -46,7 +48,7 @@ public static partial class ProjectRules
         if (request.Files.All(file => file.Path != request.EntryFile))
             return $"Entry file not found: {request.EntryFile}";
         if (LanguageFor(request.EntryFile) is null)
-            return "Only .py, .js, .ts, .java and .cpp files can be run";
+            return "Only .py, .js, .ts, .java, .cpp, .go and .rs files can be run";
         return null;
     }
 }

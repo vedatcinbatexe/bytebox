@@ -16,6 +16,8 @@ const LANGUAGE_NAMES: Record<string, string> = {
   typescript: 'TypeScript',
   java: 'Java',
   cpp: 'C++',
+  go: 'Go',
+  rust: 'Rust',
   html: 'HTML',
   css: 'CSS',
   json: 'JSON',

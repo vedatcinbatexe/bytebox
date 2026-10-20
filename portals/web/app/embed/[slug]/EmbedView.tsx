@@ -24,7 +24,7 @@ export function EmbedView({ slug }: { slug: string }) {
         if (!project) return;
         const paths = Object.keys(project.project.files).sort();
         const first =
-          paths.find((path) => /^(main\.(py|js|ts|cpp)|Main\.java|index\.html)$/.test(path)) ?? paths[0] ?? null;
+          paths.find((path) => /^(main\.(py|js|ts|cpp|go|rs)|Main\.java|index\.html)$/.test(path)) ?? paths[0] ?? null;
         setActive(first);
         setShowPreview(htmlFiles(project.project.files).length > 0);
       })

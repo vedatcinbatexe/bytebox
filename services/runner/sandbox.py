@@ -160,7 +160,6 @@ class OutputCollector:
 
 
 SAFE_PATH = re.compile(r"^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$")
-CPP_MAIN = re.compile(r"\bint\s+main\s*\(")
 
 
 def validate_project(files, entry_file):
@@ -185,15 +184,18 @@ def build_script(config, files, entry_file, archive_size):
     # head reads exactly the archive, so we never wait for stdin to be closed.
     steps = [f"head -c {archive_size} | tar -x -C /tmp -f -", "cd /tmp/project"]
     if "compile" in config:
-        # Compile the entry file plus every other C++ file that has no main()
+        # Compile the entry file plus every other file of the language that has no main()
+        main = re.compile(config.get("main", "$^"))
+        folder = entry_file.rpartition("/")[0]
         others = [
             file["path"]
             for file in files
             if file["path"] != entry_file
             and file["path"].endswith(config["extension"])
-            and not CPP_MAIN.search(file["content"])
+            and not main.search(file["content"])
+            and (not config.get("same_folder") or file["path"].rpartition("/")[0] == folder)
         ]
-        steps.append(config["compile"].format(sources=" ".join([entry_file, *others])))
+        steps.append(config["compile"].format(entry=entry_file, sources=" ".join([entry_file, *others])))
     steps.append(config["run"].format(entry=entry_file) + " < /tmp/.stdin")
     return " && ".join(steps)
 

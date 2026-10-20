@@ -58,6 +58,31 @@ def test_cpp_compiles_other_files_without_main():
     assert result["stdout"] == "5\n"
 
 
+def test_go_compiles_other_files_in_the_same_folder():
+    project = files(
+        **{
+            "main.go": 'package main\nimport "fmt"\nfunc main() { fmt.Println(add(2, 3)) }',
+            "math.go": "package main\nfunc add(a, b int) int { return a + b }",
+            "other/main.go": "package main\nfunc main() {}",
+        }
+    )
+    result = run_project("go", project, "main.go", "")
+    assert result["status"] == "completed", result["stderr"]
+    assert result["stdout"] == "5\n"
+
+
+def test_rust_finds_modules_in_other_files():
+    project = files(
+        **{
+            "main.rs": "mod math;\nfn main() { println!(\"{}\", math::add(2, 3)); }",
+            "math.rs": "pub fn add(a: i32, b: i32) -> i32 { a + b }",
+        }
+    )
+    result = run_project("rust", project, "main.rs")
+    assert result["status"] == "completed", result["stderr"]
+    assert result["stdout"] == "5\n"
+
+
 def test_program_can_read_and_write_project_files():
     project = files(
         **{

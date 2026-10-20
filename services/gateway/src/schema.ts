@@ -39,6 +39,8 @@ const languages = [
   { id: 'typescript', name: 'TypeScript', extension: '.ts' },
   { id: 'java', name: 'Java', extension: '.java' },
   { id: 'cpp', name: 'C++', extension: '.cpp' },
+  { id: 'go', name: 'Go', extension: '.go' },
+  { id: 'rust', name: 'Rust', extension: '.rs' },
 ];
 
 export interface Context {

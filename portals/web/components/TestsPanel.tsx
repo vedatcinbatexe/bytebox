@@ -81,7 +81,7 @@ export function TestsPanel({ tests, onChange, entryFile, getFiles, canChange, re
               Runs <span className="font-mono text-fg">{entryFile}</span>
             </>
           ) : (
-            'Open a .py, .js, .ts, .java or .cpp file to test it'
+            'Open a .py, .js, .ts, .java, .cpp, .go or .rs file to test it'
           )}
         </span>
         {finished.length > 0 && !running && (

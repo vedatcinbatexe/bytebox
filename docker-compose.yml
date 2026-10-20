@@ -123,11 +123,19 @@ services:
         condition: service_healthy
       sandbox-cpp:
         condition: service_completed_successfully
+      sandbox-go:
+        condition: service_completed_successfully
 
   # Builds the C++ sandbox image used by the runner, then exits
   sandbox-cpp:
     build: ./services/runner/images/cpp
     image: bytebox/sandbox-cpp
+    command: ['true']
+
+  # Builds the Go sandbox image (standard library pre-compiled), then exits
+  sandbox-go:
+    build: ./services/runner/images/go
+    image: bytebox/sandbox-go
     command: ['true']
 
   terminal:
