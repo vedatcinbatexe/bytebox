@@ -83,6 +83,8 @@ class Project(ProjectInput):
     owner_id: str | None = None  # user id from the identity service; None for old projects made without login
     owner_login: str | None = None  # shown on Explore and profiles
     visibility: Visibility = "unlisted"
+    star_count: int = 0
+    starred_by_me: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -94,3 +96,9 @@ class ProjectSummary(Model):
     updated_at: datetime
     visibility: Visibility = "unlisted"
     owner_login: str | None = None
+    star_count: int = 0
+
+
+class StarState(Model):
+    star_count: int
+    starred_by_me: bool

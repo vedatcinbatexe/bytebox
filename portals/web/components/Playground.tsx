@@ -49,6 +49,7 @@ import {
   VISIBILITY,
   createProject,
   fetchProject,
+  setStar,
   setVisibility,
   updateProject,
   type SavedProject,
@@ -136,6 +137,7 @@ export function Playground({ slug }: Props) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [visibility, setVisibilityState] = useState<Visibility>('UNLISTED');
   const [ownerLogin, setOwnerLogin] = useState<string | null>(null);
+  const [stars, setStars] = useState({ starCount: 0, starredByMe: false });
   const [cursor, setCursor] = useState<{ line: number; column: number } | null>(null);
   const [asideTab, setAsideTab] = useState<'output' | 'preview'>('output');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -191,6 +193,7 @@ export function Playground({ slug }: Props) {
           setIsOwner(saved.ownedByMe);
           setVisibilityState(saved.visibility);
           setOwnerLogin(saved.ownerLogin);
+          setStars({ starCount: saved.starCount, starredByMe: saved.starredByMe });
           setLoaded(true);
         })
         .catch((loadError) => showNotice(errorMessage(loadError), true));
@@ -687,6 +690,23 @@ export function Playground({ slug }: Props) {
 
         {/* Project: share / save / copy link / fork / download */}
         <div className="flex items-center gap-2">
+          {slug && (
+            <button
+              onClick={async () => {
+                if (!canChange()) return;
+                try {
+                  setStars(await setStar(slug, !stars.starredByMe));
+                } catch (starError) {
+                  showNotice((starError as Error).message, true);
+                }
+              }}
+              aria-pressed={stars.starredByMe}
+              title={stars.starredByMe ? 'Remove your star' : 'Star this project'}
+              className={`${SECONDARY_BUTTON} ${stars.starredByMe ? 'border-warning text-warning' : ''}`}
+            >
+              {stars.starredByMe ? '★ Starred' : '☆ Star'} <span className="text-muted">{stars.starCount}</span>
+            </button>
+          )}
           <button
             onClick={() => downloadZip(currentInput().project, title)}
             className={SECONDARY_BUTTON}

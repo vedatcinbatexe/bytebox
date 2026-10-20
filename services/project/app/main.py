@@ -15,6 +15,7 @@ from .models import (
     Project,
     ProjectInput,
     ProjectSummary,
+    StarState,
     ProjectPatch,
     Version,
     VersionSummary,
@@ -39,6 +40,7 @@ def summary(document):
         updated_at=document["updated_at"],
         visibility=document.get("visibility", "unlisted"),
         owner_login=document.get("owner_login"),
+        star_count=document.get("star_count", 0),
     )
 
 
@@ -66,9 +68,10 @@ def public_projects_of(login: str):
 
 
 @app.get("/explore", response_model=list[ProjectSummary])
-def explore(limit: int = 50):
-    """Newest public projects."""
-    documents = db.projects.find({"visibility": "public"}).sort("updated_at", -1).limit(min(max(limit, 1), 100))
+def explore(limit: int = 50, sort: str = "newest"):
+    """Public projects, newest or most starred first."""
+    order = [("star_count", -1), ("updated_at", -1)] if sort == "stars" else [("updated_at", -1)]
+    documents = db.projects.find({"visibility": "public"}).sort(order).limit(min(max(limit, 1), 100))
     return [summary(document) for document in documents]
 
 
@@ -105,7 +108,39 @@ def get_project(slug: Slug, user_id: UserId = None):
     document = find_project(slug)
     if not can_view(document, user_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")  # don't reveal private projects
-    return to_project(document)
+    project = to_project(document)
+    if user_id:
+        project.starred_by_me = db.stars.count_documents({"project_id": slug, "user_id": user_id}) > 0
+    return project
+
+
+@app.put("/projects/{slug}/star", response_model=StarState)
+def star(slug: Slug, user_id: UserId = None):
+    user = require_user(user_id)
+    document = find_project(slug)
+    if not can_view(document, user):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
+    try:
+        db.stars.insert_one({"project_id": slug, "user_id": user, "created_at": datetime.now(UTC)})
+        db.projects.update_one({"_id": slug}, {"$inc": {"star_count": 1}})
+    except DuplicateKeyError:
+        pass  # already starred: starring twice changes nothing
+    return star_state(slug, user)
+
+
+@app.delete("/projects/{slug}/star", response_model=StarState)
+def unstar(slug: Slug, user_id: UserId = None):
+    user = require_user(user_id)
+    find_project(slug)
+    if db.stars.delete_one({"project_id": slug, "user_id": user}).deleted_count:
+        db.projects.update_one({"_id": slug}, {"$inc": {"star_count": -1}})
+    return star_state(slug, user)
+
+
+def star_state(slug, user_id):
+    count = db.projects.find_one({"_id": slug}, {"star_count": 1}).get("star_count", 0)
+    starred = db.stars.count_documents({"project_id": slug, "user_id": user_id}) > 0
+    return StarState(star_count=count, starred_by_me=starred)
 
 
 @app.put("/projects/{slug}", response_model=Project)
@@ -134,6 +169,7 @@ def delete_project(slug: Slug, user_id: UserId = None):
     check_owner(find_project(slug), require_user(user_id))
     db.projects.delete_one({"_id": slug})
     db.versions.delete_many({"project_id": slug})
+    db.stars.delete_many({"project_id": slug})
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

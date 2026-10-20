@@ -78,7 +78,7 @@ export function ProfileView({ login }: { login: string }) {
                     >
                       <span className="mb-2 truncate font-semibold">{project.title}</span>
                       <span className="mt-auto text-xs text-subtle">
-                        {project.fileCount} {project.fileCount === 1 ? 'file' : 'files'} · updated{' '}
+                        ★ {project.starCount} · {project.fileCount} {project.fileCount === 1 ? 'file' : 'files'} · updated{' '}
                         {new Date(project.updatedAt.endsWith('Z') ? project.updatedAt : `${project.updatedAt}Z`).toLocaleDateString()}
                       </span>
                     </Link>

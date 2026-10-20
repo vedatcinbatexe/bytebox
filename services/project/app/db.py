@@ -9,6 +9,10 @@ database = client[os.environ.get("MONGO_DB", "bytebox")]
 projects = database["projects"]
 projects.create_index("owner_id")
 
+# One document per (project, user) star
+stars = database["stars"]
+stars.create_index([("project_id", 1), ("user_id", 1)], unique=True)
+
 # Earlier versions of projects, saved before every change (newest kept, see main.py)
 versions = database["project_versions"]
 versions.create_index([("project_id", 1), ("saved_at", -1)])

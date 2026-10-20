@@ -18,6 +18,8 @@ export interface Project extends ProjectInput {
   ownerId: string | null;
   ownerLogin: string | null;
   visibility: Visibility;
+  starCount: number;
+  starredByMe: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -86,8 +88,21 @@ export async function publicProjectsOf(login: string): Promise<ProjectSummary[]>
   return (await call<ProjectSummary[]>('GET', `/users/${encodeURIComponent(login)}/projects`)) ?? [];
 }
 
-export async function explore(): Promise<ProjectSummary[]> {
-  return (await call<ProjectSummary[]>('GET', '/explore?limit=60')) ?? [];
+export async function explore(sort: 'newest' | 'stars' = 'newest'): Promise<ProjectSummary[]> {
+  return (await call<ProjectSummary[]>('GET', `/explore?limit=60&sort=${sort}`)) ?? [];
+}
+
+export interface StarState {
+  starCount: number;
+  starredByMe: boolean;
+}
+
+export async function setStar(slug: string, starred: boolean, userId: string): Promise<StarState> {
+  const state = await call<StarState>(starred ? 'PUT' : 'DELETE', `/projects/${encodeURIComponent(slug)}/star`, {
+    userId,
+  });
+  if (!state) throw new GraphQLError('Project not found', { extensions: { code: 'NOT_FOUND' } });
+  return state;
 }
 
 export async function setVisibility(slug: string, visibility: Visibility, userId: string): Promise<Project> {

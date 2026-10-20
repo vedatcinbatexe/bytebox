@@ -18,6 +18,8 @@ export interface SavedProject {
   ownedByMe: boolean;
   visibility: Visibility;
   ownerLogin: string | null;
+  starCount: number;
+  starredByMe: boolean;
 }
 
 export interface ProjectSummary {
@@ -27,6 +29,7 @@ export interface ProjectSummary {
   updatedAt: string;
   visibility: Visibility;
   ownerLogin: string | null;
+  starCount: number;
 }
 
 interface ApiProject {
@@ -39,6 +42,8 @@ interface ApiProject {
   ownedByMe: boolean;
   visibility: Visibility;
   ownerLogin: string | null;
+  starCount: number;
+  starredByMe: boolean;
 }
 
 export interface ProjectInput {
@@ -47,8 +52,9 @@ export interface ProjectInput {
   stdin: string;
 }
 
-const PROJECT_FIELDS = 'slug title files { path content } folders stdin forkedFrom ownedByMe visibility ownerLogin';
-const SUMMARY_FIELDS = 'slug title fileCount updatedAt visibility ownerLogin';
+const PROJECT_FIELDS =
+  'slug title files { path content } folders stdin forkedFrom ownedByMe visibility ownerLogin starCount starredByMe';
+const SUMMARY_FIELDS = 'slug title fileCount updatedAt visibility ownerLogin starCount';
 
 function fromApi(project: ApiProject): SavedProject {
   return {
@@ -63,6 +69,8 @@ function fromApi(project: ApiProject): SavedProject {
     ownedByMe: project.ownedByMe,
     visibility: project.visibility,
     ownerLogin: project.ownerLogin,
+    starCount: project.starCount,
+    starredByMe: project.starredByMe,
   };
 }
 
@@ -169,9 +177,20 @@ export async function fetchProfile(login: string): Promise<UserProfile | null> {
   return data.userProfile;
 }
 
-export async function fetchExplore(): Promise<ProjectSummary[]> {
-  const data = await request<{ explore: ProjectSummary[] }>(`{ explore { ${SUMMARY_FIELDS} } }`);
+export async function fetchExplore(sort: 'NEWEST' | 'STARS' = 'NEWEST'): Promise<ProjectSummary[]> {
+  const data = await request<{ explore: ProjectSummary[] }>(
+    `query Explore($sort: ExploreSort) { explore(sort: $sort) { ${SUMMARY_FIELDS} } }`,
+    { sort },
+  );
   return data.explore;
+}
+
+export async function setStar(slug: string, starred: boolean): Promise<{ starCount: number; starredByMe: boolean }> {
+  const data = await request<{ starProject: { starCount: number; starredByMe: boolean } }>(
+    `mutation Star($slug: String!, $starred: Boolean!) { starProject(slug: $slug, starred: $starred) { starCount starredByMe } }`,
+    { slug, starred },
+  );
+  return data.starProject;
 }
 
 export async function setVisibility(slug: string, visibility: Visibility): Promise<void> {
