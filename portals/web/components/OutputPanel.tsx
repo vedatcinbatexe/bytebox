@@ -1,3 +1,7 @@
+'use client';
+
+import { useState } from 'react';
+import { parseAnsi, stripAnsi } from '@/lib/ansi';
 import type { Run, RunStatus } from '@/lib/runs';
 
 export const STATUS: Record<RunStatus, { label: string; className: string }> = {
@@ -19,13 +23,67 @@ export function isFinished(status: RunStatus): boolean {
   return status !== 'QUEUED' && status !== 'RUNNING';
 }
 
+// Program output, with ANSI colors (e.g. \x1b[32m) shown as real colors
+export function AnsiText({ text, className }: { text: string; className: string }) {
+  return (
+    <pre className={`whitespace-pre-wrap ${className}`}>
+      {parseAnsi(text).map((segment, index) => (
+        <span
+          key={index}
+          style={segment.color ? { color: segment.color } : undefined}
+          className={segment.bold ? 'font-bold' : undefined}
+        >
+          {segment.text}
+        </span>
+      ))}
+    </pre>
+  );
+}
+
+// stdout and stderr as plain text, for copying and downloading
+function plainOutput(run: Run): string {
+  return stripAnsi([run.stdout, run.stderr].filter(Boolean).join('\n'));
+}
+
 export function OutputPanel({ run, error }: Props) {
+  const [copied, setCopied] = useState(false);
+  const hasOutput = run !== null && isFinished(run.status) && Boolean(run.stdout || run.stderr);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(plainOutput(run!));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard blocked: nothing to do
+    }
+  }
+
+  function download() {
+    const url = URL.createObjectURL(new Blob([plainOutput(run!)], { type: 'text/plain' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'output.txt';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <section className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2">
         <h2 className="text-xs font-semibold tracking-wide text-muted uppercase">Output</h2>
         {run && (
           <div className="flex items-center gap-3 text-xs text-muted">
+            {hasOutput && (
+              <>
+                <button onClick={copy} className="hover:text-fg" title="Copy the output">
+                  {copied ? '✓ Copied' : '⧉ Copy'}
+                </button>
+                <button onClick={download} className="hover:text-fg" title="Download the output as output.txt">
+                  ⤓
+                </button>
+              </>
+            )}
             {isFinished(run.status) && (
               <>
                 {run.exitCode !== null && <span>exit {run.exitCode}</span>}
@@ -49,8 +107,8 @@ export function OutputPanel({ run, error }: Props) {
         {run && run.status === 'QUEUED' && <p className="text-subtle">Waiting for output…</p>}
         {run && run.status !== 'QUEUED' && (
           <>
-            {run.stdout && <pre className="whitespace-pre-wrap text-fg">{run.stdout}</pre>}
-            {run.stderr && <pre className="whitespace-pre-wrap text-danger">{run.stderr}</pre>}
+            {run.stdout && <AnsiText text={run.stdout} className="text-fg" />}
+            {run.stderr && <AnsiText text={run.stderr} className="text-danger" />}
             {!run.stdout && !run.stderr && isFinished(run.status) && <p className="text-subtle">No output.</p>}
             {run.status === 'RUNNING' && <span className="inline-block animate-pulse text-accent">▋</span>}
             {run.truncated && (
