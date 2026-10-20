@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { FileTree } from './FileTree';
-import { OutputPanel } from './OutputPanel';
+import { OutputPanel, isFinished } from './OutputPanel';
 import { PreviewPanel } from './PreviewPanel';
 import { htmlFiles } from '@/lib/preview';
 import { TerminalPanel } from './TerminalPanel';
@@ -374,7 +374,7 @@ export function Playground({ slug }: Props) {
         created.id,
         (updated) => {
           setRun(updated);
-          if (updated.status !== 'QUEUED') {
+          if (isFinished(updated.status)) {
             closeSubscription.current?.();
             setRunning(false);
           }

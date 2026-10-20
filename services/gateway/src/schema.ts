@@ -145,6 +145,8 @@ const typeDefs = /* GraphQL */ `
 
   enum RunStatus {
     QUEUED
+    "Started; stdout/stderr hold the output so far"
+    RUNNING
     COMPLETED
     TIMED_OUT
     MEMORY_EXCEEDED

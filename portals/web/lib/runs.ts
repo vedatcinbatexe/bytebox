@@ -1,6 +1,6 @@
 import { request, subscribe, type GraphQLRequestError } from './graphql';
 
-export type RunStatus = 'QUEUED' | 'COMPLETED' | 'TIMED_OUT' | 'MEMORY_EXCEEDED' | 'FAILED';
+export type RunStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'TIMED_OUT' | 'MEMORY_EXCEEDED' | 'FAILED';
 
 export interface Run {
   id: string;

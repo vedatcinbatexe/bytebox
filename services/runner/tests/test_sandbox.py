@@ -1,5 +1,8 @@
 """Integration tests: these start real Docker containers."""
 
+import threading
+import time
+
 import sandbox
 from sandbox import run_code
 
@@ -103,3 +106,22 @@ def test_leftover_containers_are_removed():
     assert sandbox.remove_leftover_containers(max_age_seconds=0) >= 1
     remaining = [c.id for c in sandbox.client.containers.list(all=True, filters={"label": "bytebox=sandbox"})]
     assert leftover.id not in remaining
+
+
+def test_output_can_be_watched_while_running():
+    seen = []
+
+    def watch(output):
+        # Sample the growing output a few times while the program runs
+        def sample():
+            for _ in range(20):
+                seen.append(output.stdout)
+                time.sleep(0.1)
+
+        threading.Thread(target=sample, daemon=True).start()
+
+    code = "import time\nfor i in range(3):\n    print(i, flush=True)\n    time.sleep(0.4)"
+    result = sandbox.run_project("python", [{"path": "main.py", "content": code}], "main.py", on_start=watch)
+    assert result["stdout"] == "0\n1\n2\n"
+    # Partial output was visible before the program finished
+    assert b"0\n" in seen and any(chunk.startswith(b"0\n") and chunk != b"0\n1\n2\n" for chunk in seen)

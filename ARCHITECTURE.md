@@ -159,6 +159,8 @@ sequenceDiagram
 
 **Run states:** `queued → running → completed | timed_out | memory_exceeded | failed`
 
+**Live output:** while a program runs, the runner publishes its output so far to `run.output` (at most every 250 ms, only when it changed). Execution keeps it in Redis (`run:{id}:live`, 10 min) and wakes up `StreamRun`, which sends status `running` with the partial output; the web portal shows it line by line. The database only stores the final result.
+
 - `completed`: the program finished (any exit code, including compile errors)
 - `timed_out`: killed after the time limit
 - `memory_exceeded`: killed for using too much memory
@@ -170,6 +172,7 @@ sequenceDiagram
 |---|---|---|---|
 | `run.requested` | execution | runner | `runId, language, code, stdin, limits` |
 | `run.started` | runner | execution | `runId, startedAt` |
+| `run.output` | runner | execution | `runId, stdout, stderr` (output so far, while running) |
 | `run.completed` | runner | execution | `runId, status, exitCode, stdout, stderr, truncated, timeMs` |
 
 ---

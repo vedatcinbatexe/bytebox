@@ -9,6 +9,7 @@ public class RunQueue(IConnection connection)
 {
     public const string Requested = "run.requested";
     public const string Completed = "run.completed";
+    public const string Output = "run.output"; // live output while a program runs
 
     // A RabbitMQ channel must not be used by two publishers at the same time
     private readonly SemaphoreSlim _lock = new(1, 1);
@@ -47,5 +48,6 @@ public class RunQueue(IConnection connection)
     {
         await channel.QueueDeclareAsync(Requested, durable: true, exclusive: false, autoDelete: false, cancellationToken: cancellationToken);
         await channel.QueueDeclareAsync(Completed, durable: true, exclusive: false, autoDelete: false, cancellationToken: cancellationToken);
+        await channel.QueueDeclareAsync(Output, durable: true, exclusive: false, autoDelete: false, cancellationToken: cancellationToken);
     }
 }
