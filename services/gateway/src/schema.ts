@@ -20,6 +20,7 @@ import {
   getVersion,
   listVersions,
   setVisibility,
+  setStar,
   renameProject,
   restoreVersion,
   getProject,
@@ -68,8 +69,8 @@ const typeDefs = /* GraphQL */ `
     run(id: ID!): Run
     "A shared project, or null if the link is unknown (or private and not yours)"
     project(slug: String!): Project
-    "Newest public projects"
-    explore: [ProjectSummary!]!
+    "Public projects, newest or most starred first"
+    explore(sort: ExploreSort = NEWEST): [ProjectSummary!]!
     "Someone's public profile and public projects, or null if there's no such user"
     userProfile(login: String!): UserProfile
     "The signed-in user, or null"
@@ -94,6 +95,8 @@ const typeDefs = /* GraphQL */ `
     renameProject(slug: String!, title: String!): Project!
     "public (listed on Explore), unlisted (anyone with the link) or private (only you)"
     setProjectVisibility(slug: String!, visibility: Visibility!): Project!
+    "Star (or unstar) a project you can see"
+    starProject(slug: String!, starred: Boolean!): StarState!
     "Delete a project you own (cannot be undone)"
     deleteProject(slug: String!): Boolean!
     "Make an earlier version the current one (the current one is kept in history)"
@@ -138,6 +141,7 @@ const typeDefs = /* GraphQL */ `
     updatedAt: String!
     visibility: Visibility!
     ownerLogin: String
+    starCount: Int!
   }
 
   type Subscription {
@@ -171,6 +175,16 @@ const typeDefs = /* GraphQL */ `
     content: String!
   }
 
+  enum ExploreSort {
+    NEWEST
+    STARS
+  }
+
+  type StarState {
+    starCount: Int!
+    starredByMe: Boolean!
+  }
+
   enum Visibility {
     PUBLIC
     UNLISTED
@@ -181,6 +195,9 @@ const typeDefs = /* GraphQL */ `
     slug: String!
     visibility: Visibility!
     ownerLogin: String
+    starCount: Int!
+    "False when signed out"
+    starredByMe: Boolean!
     title: String!
     files: [ProjectFile!]!
     folders: [String!]!
@@ -279,7 +296,7 @@ export const schema = createSchema<Context>({
         }
       },
       project: (_, { slug }: { slug: string }, { user }) => getProject(slug, user?.id),
-      explore: () => explore(),
+      explore: (_, { sort }: { sort: 'NEWEST' | 'STARS' }) => explore(sort === 'STARS' ? 'stars' : 'newest'),
       userProfile: async (_, { login }: { login: string }) => {
         const [user, projects] = await Promise.all([getPublicUser(login), publicProjectsOf(login)]);
         if (!user) return null;
@@ -320,6 +337,9 @@ export const schema = createSchema<Context>({
         await limitSaves(signedIn.id);
         return createProject({ ...input, ...(forkedFrom ? { forkedFrom } : {}) }, signedIn.id, signedIn.login);
       },
+
+      starProject: async (_, { slug, starred }: { slug: string; starred: boolean }, { user }) =>
+        setStar(slug, starred, requireUser(user).id),
 
       setProjectVisibility: async (
         _,

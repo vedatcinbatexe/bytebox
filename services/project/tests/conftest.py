@@ -18,6 +18,8 @@ from app.main import app  # noqa: E402
 def client():
     db.projects.delete_many({})
     db.versions.delete_many({})
+    db.stars.delete_many({})
     yield TestClient(app)
     db.projects.delete_many({})
     db.versions.delete_many({})
+    db.stars.delete_many({})

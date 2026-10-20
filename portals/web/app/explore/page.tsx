@@ -23,13 +23,15 @@ export default function ExplorePage() {
   const router = useRouter();
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
   const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<'NEWEST' | 'STARS'>('NEWEST');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchExplore()
+    setProjects(null);
+    fetchExplore(sort)
       .then(setProjects)
       .catch((loadError: Error) => setError(loadError.message));
-  }, []);
+  }, [sort]);
 
   const query = search.trim().toLowerCase();
   const shown = (projects ?? []).filter(
@@ -52,14 +54,29 @@ export default function ExplorePage() {
         <p className="mb-5 text-sm text-muted">
           Public projects from the Bytebox community. Open one to run it, or fork it to make it yours.
         </p>
-        <input
-          type="search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search by title or author…"
-          aria-label="Search public projects"
-          className="mb-5 w-full rounded border border-line-strong bg-panel px-3 py-2 text-sm outline-none focus:border-accent"
-        />
+        <div className="mb-5 flex gap-2">
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by title or author…"
+            aria-label="Search public projects"
+            className="min-w-0 flex-1 rounded border border-line-strong bg-panel px-3 py-2 text-sm outline-none focus:border-accent"
+          />
+          <div role="radiogroup" aria-label="Sort" className="flex shrink-0 overflow-hidden rounded border border-line-strong text-sm">
+            {(['NEWEST', 'STARS'] as const).map((option) => (
+              <button
+                key={option}
+                role="radio"
+                aria-checked={sort === option}
+                onClick={() => setSort(option)}
+                className={`px-3 ${sort === option ? 'bg-accent text-accent-fg' : 'text-muted hover:bg-raised'}`}
+              >
+                {option === 'NEWEST' ? 'Newest' : '★ Most starred'}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {error && <p className="text-danger">{error}</p>}
         {projects === null && !error && <p className="text-subtle">Loading…</p>}
@@ -97,7 +114,7 @@ export default function ExplorePage() {
                 )}
                 <span className="mt-auto flex justify-between text-xs text-subtle">
                   <span>
-                    {project.fileCount} {project.fileCount === 1 ? 'file' : 'files'}
+                    ★ {project.starCount} · {project.fileCount} {project.fileCount === 1 ? 'file' : 'files'}
                   </span>
                   <span>{timeAgo(project.updatedAt)}</span>
                 </span>

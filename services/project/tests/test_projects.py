@@ -196,3 +196,33 @@ def test_profile_lists_only_public_projects_of_that_user(client):
     assert [p["slug"] for p in client.get("/users/alice/projects").json()] == [public]  # case-insensitive
     assert client.get("/users/nobody/projects").json() == []
     assert client.get("/users/a.*/projects").json() == []  # not treated as a pattern
+
+
+def test_star_and_unstar(client):
+    slug = create(client)["slug"]
+    assert client.put(f"/projects/{slug}/star").status_code == 401
+
+    assert client.put(f"/projects/{slug}/star", headers=BOB).json() == {"starCount": 1, "starredByMe": True}
+    assert client.put(f"/projects/{slug}/star", headers=BOB).json()["starCount"] == 1  # twice = once
+    assert client.put(f"/projects/{slug}/star", headers=ALICE).json()["starCount"] == 2
+    assert client.get(f"/projects/{slug}", headers=BOB).json()["starredByMe"] is True
+    assert client.get(f"/projects/{slug}").json()["starredByMe"] is False
+
+    assert client.delete(f"/projects/{slug}/star", headers=BOB).json() == {"starCount": 1, "starredByMe": False}
+    assert client.delete(f"/projects/{slug}/star", headers=BOB).json()["starCount"] == 1  # nothing to undo
+
+
+def test_cannot_star_someone_elses_private_project(client):
+    slug = create(client, {**PROJECT, "visibility": "private"})["slug"]
+    assert client.put(f"/projects/{slug}/star", headers=BOB).status_code == 404
+
+
+def test_explore_can_sort_by_stars(client):
+    first = create(client, {**PROJECT, "title": "Quiet", "visibility": "public"})["slug"]
+    second = create(client, {**PROJECT, "title": "Popular", "visibility": "public"})["slug"]
+    client.put(f"/projects/{first}/star", headers=BOB)
+    client.put(f"/projects/{first}/star", headers=ALICE)
+    client.put(f"/projects/{second}/star", headers=BOB)
+    assert [p["title"] for p in client.get("/explore?sort=stars").json()] == ["Quiet", "Popular"]
+    assert client.get("/explore?sort=stars").json()[0]["starCount"] == 2
+    assert [p["title"] for p in client.get("/explore").json()] == ["Popular", "Quiet"]  # newest first
