@@ -3,27 +3,32 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
+import type { Project } from '@/lib/project';
+import {
+  incoming,
+  outgoing,
+  startState,
+  type ProjectFile,
+  type Scan,
+  type SyncState,
+  type TerminalChanges,
+} from '@/lib/terminalSync';
 
 const TERMINAL_URL = process.env.NEXT_PUBLIC_TERMINAL_URL ?? 'ws://localhost:4100';
 const SYNC_DELAY_MS = 800;
 
-interface ProjectFile {
-  path: string;
-  content: string;
-}
-
 type ServerMessage =
   | { type: 'ready' }
   | { type: 'output'; data: string }
-  | { type: 'files'; files: ProjectFile[]; folders: string[]; skipped: string[] }
+  | ({ type: 'files'; seq: number } & Scan)
   | { type: 'error'; message: string }
   | { type: 'exit'; reason: string };
 
 interface Props {
-  // Current project files: copied in when the terminal starts, then edits are pushed in
-  files: Record<string, string>;
-  // Called with files read back from the terminal (Refresh button)
-  onPulled: (files: ProjectFile[], folders: string[], skipped: string[]) => void;
+  // The project is copied in when the terminal starts; after that, changes flow both ways
+  project: Project;
+  // Called with changes made in the terminal (files created, edited, moved or deleted)
+  onTerminalChanges: (changes: TerminalChanges) => void;
   onClose: () => void;
 }
 
@@ -31,18 +36,20 @@ function toList(files: Record<string, string>): ProjectFile[] {
   return Object.entries(files).map(([path, content]) => ({ path, content }));
 }
 
-export function TerminalPanel({ files, onPulled, onClose }: Props) {
+export function TerminalPanel({ project, onTerminalChanges, onClose }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
-  const filesRef = useRef(files);
-  const onPulledRef = useRef(onPulled);
-  const lastSynced = useRef<Record<string, string>>({});
+  const projectRef = useRef(project);
+  const onChangesRef = useRef(onTerminalChanges);
+  const syncState = useRef<SyncState>(startState(project));
+  const seq = useRef(0); // numbers our changes; scans taken before the latest one are ignored
+  const structure = useRef(''); // file and folder names, to send renames/deletes without delay
   const [status, setStatus] = useState<'connecting' | 'ready' | 'ended'>('connecting');
   const [endReason, setEndReason] = useState('');
   const [attempt, setAttempt] = useState(0); // bump to restart
 
-  filesRef.current = files;
-  onPulledRef.current = onPulled;
+  projectRef.current = project;
+  onChangesRef.current = onTerminalChanges;
 
   // Connect: create the terminal, open the WebSocket, wire input/output/resize
   useEffect(() => {
@@ -88,8 +95,11 @@ export function TerminalPanel({ files, onPulled, onClose }: Props) {
 
       const start = () => {
         started = true;
-        lastSynced.current = { ...filesRef.current };
-        send({ type: 'init', files: toList(filesRef.current), cols: terminal!.cols, rows: terminal!.rows });
+        const { files } = projectRef.current;
+        // Empty folders aren't part of init: leaving them out of the state makes the sync effect send them
+        syncState.current = { files: { ...files }, folders: new Set() };
+        seq.current = 0;
+        send({ type: 'init', files: toList(files), cols: terminal!.cols, rows: terminal!.rows });
       };
       if (socket.readyState === WebSocket.OPEN) start();
       else socket.addEventListener('open', start);
@@ -106,9 +116,12 @@ export function TerminalPanel({ files, onPulled, onClose }: Props) {
         case 'output':
           terminal?.write(message.data);
           break;
-        case 'files':
-          onPulledRef.current(message.files, message.folders, message.skipped);
+        case 'files': {
+          if (message.seq < seq.current) break; // taken before our latest change reached the terminal
+          const changes = incoming(projectRef.current, syncState.current, message);
+          if (changes) onChangesRef.current(changes);
           break;
+        }
         case 'error':
           terminal?.writeln(`\r\n\x1b[31m${message.message}\x1b[0m`);
           break;
@@ -128,23 +141,30 @@ export function TerminalPanel({ files, onPulled, onClose }: Props) {
     };
   }, [attempt]);
 
-  // Push edited files into the terminal (only the ones that changed)
+  // Push editor changes into the terminal. New, renamed and deleted files or folders go right away;
+  // typing inside a file is sent after a short pause.
   useEffect(() => {
     if (status !== 'ready') return;
-    const timer = setTimeout(() => {
-      const changed = Object.entries(files)
-        .filter(([path, content]) => lastSynced.current[path] !== content)
-        .map(([path, content]) => ({ path, content }));
-      if (changed.length === 0) return;
-      socketRef.current?.send(JSON.stringify({ type: 'sync', files: changed }));
-      lastSynced.current = { ...files };
-    }, SYNC_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [files, status]);
+    const names = JSON.stringify([Object.keys(project.files).sort(), project.folders]);
+    const structureChanged = names !== structure.current;
+    structure.current = names;
 
-  function refresh() {
-    socketRef.current?.send(JSON.stringify({ type: 'pull' }));
-  }
+    const timer = setTimeout(
+      () => {
+        const { deletes, files, folders } = outgoing(project, syncState.current);
+        const socket = socketRef.current;
+        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+        if (deletes.length > 0) {
+          socket.send(JSON.stringify({ type: 'delete', paths: deletes, seq: ++seq.current }));
+        }
+        if (files.length > 0 || folders.length > 0) {
+          socket.send(JSON.stringify({ type: 'sync', files, folders, seq: ++seq.current }));
+        }
+      },
+      structureChanged ? 0 : SYNC_DELAY_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [project, status]);
 
   return (
     <section className="flex h-72 shrink-0 flex-col border-t border-zinc-800 bg-zinc-950">
@@ -155,15 +175,12 @@ export function TerminalPanel({ files, onPulled, onClose }: Props) {
           {status === 'ready' && '● Connected'}
           {status === 'ended' && (endReason || 'Disconnected')}
         </span>
+        {status === 'ready' && (
+          <span className="text-zinc-500" title="Changes in the terminal show up in the file tree automatically">
+            · files in sync
+          </span>
+        )}
         <span className="ml-auto" />
-        <button
-          onClick={refresh}
-          disabled={status !== 'ready'}
-          title="Copy files created or changed in the terminal into the file tree"
-          className="rounded px-2 py-0.5 text-zinc-300 hover:bg-zinc-800 disabled:opacity-40"
-        >
-          ⟳ Refresh files
-        </button>
         {status === 'ended' && (
           <button
             onClick={() => setAttempt((count) => count + 1)}

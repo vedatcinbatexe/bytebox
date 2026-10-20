@@ -87,15 +87,51 @@ test('pull returns files created in the terminal and skips binaries', async () =
   terminal.type('mkdir -p notes && echo "from the shell" > notes/todo.txt && head -c 100 /dev/urandom > blob.bin && echo DONE\n');
   await terminal.waitForOutput('DONE');
   terminal.ws.send(JSON.stringify({ type: 'pull' }));
-  await terminal.waitFor(() => terminal.messages.some((m) => m.type === 'files'), 'files');
+  const hasTodo = (m: ServerMessage) =>
+    m.type === 'files' && m.files.some((file) => file.path === 'notes/todo.txt');
+  await terminal.waitFor(() => terminal.messages.some(hasTodo), 'files with notes/todo.txt');
 
-  const result = terminal.messages.find((m) => m.type === 'files');
+  const result = terminal.messages.find(hasTodo);
   assert.ok(result && result.type === 'files');
   const paths = result.files.map((file) => file.path).sort();
   assert.deepEqual(paths, ['main.py', 'notes/todo.txt', 'utils/greet.py']);
   assert.equal(result.files.find((file) => file.path === 'notes/todo.txt')?.content, 'from the shell\n');
   assert.ok(result.folders.includes('notes'));
   assert.ok(result.skipped.includes('blob.bin'));
+  terminal.close();
+});
+
+// Latest automatic "files" message that matches a condition
+function latestFiles(terminal: Awaited<ReturnType<typeof openTerminal>>) {
+  const all = terminal.messages.filter((m) => m.type === 'files');
+  return all[all.length - 1];
+}
+
+test('changes made in the shell are sent automatically', async () => {
+  const terminal = await openTerminal();
+  await terminal.ready();
+  terminal.type('echo auto > auto.txt && mv utils lib && rm main.py && echo DONE\n');
+  await terminal.waitFor(() => {
+    const files = latestFiles(terminal);
+    return files?.type === 'files' && files.files.some((file) => file.path === 'auto.txt');
+  }, 'automatic files message');
+
+  const result = latestFiles(terminal);
+  assert.ok(result && result.type === 'files');
+  assert.deepEqual(result.files.map((file) => file.path).sort(), ['auto.txt', 'lib/greet.py']);
+  assert.ok(result.folders.includes('lib') && !result.folders.includes('utils'));
+  terminal.close();
+});
+
+test('deletes and new folders from the editor reach the workspace', async () => {
+  const terminal = await openTerminal();
+  await terminal.ready();
+  terminal.ws.send(JSON.stringify({ type: 'delete', paths: ['utils/greet.py'] }));
+  terminal.ws.send(JSON.stringify({ type: 'sync', files: [], folders: ['docs/drafts'] }));
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  terminal.type('ls -d utils 2>/dev/null || echo NO_UTILS; ls -d docs/drafts && echo HAS_DRAFTS\n');
+  await terminal.waitForOutput('NO_UTILS');
+  await terminal.waitForOutput('HAS_DRAFTS');
   terminal.close();
 });
 

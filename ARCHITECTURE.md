@@ -446,14 +446,18 @@ subscription {
 ### Step 7 — Terminal Sessions
 - [x] **Workspace image** (`bytebox/sandbox-workspace`): Alpine with bash, Python, Node.js, g++, coreutils, nano, less
 - [x] **New `services/terminal`** (Node.js + `ws` + Docker API): one long-lived workspace container per session; the shell runs as a `docker exec` with a TTY
-- [x] Browser ↔ terminal over **WebSocket** (JSON messages: `init`, `input`, `resize`, `sync`, `pull` → `ready`, `output`, `files`, `error`, `exit`)
+- [x] Browser ↔ terminal over **WebSocket** (JSON messages: `init`, `input`, `resize`, `sync`, `delete`, `pull` → `ready`, `output`, `files`, `error`, `exit`)
 - [x] **Web:** terminal panel with **xterm.js** under the editor, `>_ Terminal` button, Restart and Close
-- [x] **File sync (v1):** project files copied in at start; edited files pushed in automatically (only changed files, debounced); **Refresh files** pulls text files created or changed in the terminal into the file tree (adds/updates, never deletes; binaries and files > 64 KB skipped)
+- [x] **Web:** `? Commands` button opens a cheat sheet of terminal commands with examples
+- [x] **Live two-way file sync:**
+  - Terminal → file tree: the workspace is rescanned 400 ms after the shell goes quiet and every 5 s; when anything changed, the tree adds, updates, moves and deletes files and folders to match (binaries and files > 64 KB skipped)
+  - Editor → terminal: new, renamed and deleted files/folders are sent right away; typing inside a file is sent after 800 ms
+  - Edits not yet sent win over the terminal's copy; changes are numbered (`seq`) so scans taken before the latest editor change are ignored, and the service handles messages in order
 - [x] Same sandbox rules as runs: no network, `nobody` user, read-only root FS, writable `/workspace` and `/tmp` (tmpfs), no capabilities, 256 MB, half a CPU, 64 processes
 - [x] Session limits: **1 session per client IP** (a new one replaces the old one), closed after **15 min idle** or **1 hour**
 - [x] Only the web portal's origin may connect (`ALLOWED_ORIGINS`), other sites get 403
 - [x] Cleanup: containers removed when a session ends, on service start, and by a sweep every minute
-- [x] Tests (8): run project files, non-root + no network + read-only, sync, pull (skips binaries), replace old session, `exit` ends session, invalid paths, foreign origin rejected
+- [x] Tests (10): run project files, non-root + no network + read-only, sync, pull (skips binaries), automatic change updates (create/move/delete), deletes and new folders from the editor, replace old session, `exit` ends session, invalid paths, foreign origin rejected
 
 ```mermaid
 flowchart LR
@@ -484,7 +488,6 @@ flowchart LR
 - [ ] Deploy with compose on a VM, runners and terminal sessions on a separate VM, TLS proxy
 
 ### Step 11 — Stretch Goals
-- [ ] Live two-way file sync between terminal and file tree
 - [ ] HTML/CSS/JS live preview (browser iframe)
 - [ ] Collaborative editing (Yjs)
 - [ ] Challenge mode with hidden test cases + leaderboard
@@ -506,5 +509,5 @@ flowchart LR
 | Isolation | Docker per run → gVisor later | Simple start, clear upgrade path |
 | Multi-file runs | Whole project sent with each run, entry = open file | Runs stay stateless and one-off; same runner design as single files |
 | Terminal | Separate long-lived session containers + WebSocket service | Interactive shells need state and a live connection; keep them apart from one-off runs |
-| Terminal ↔ file tree | Push changed files + Refresh button (v1) | Simple and reliable; live two-way sync later |
+| Terminal ↔ file tree | Live two-way sync: rescan after commands + every 5 s, numbered editor changes | Immediate updates without a file watcher in the sandbox; numbering avoids stale scans undoing edits |
 | Terminal sessions | In memory, 1 per client IP | One terminal instance is enough for now; move to Redis when scaling out |
