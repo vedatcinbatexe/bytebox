@@ -15,6 +15,7 @@ import { StatusBar } from './StatusBar';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { CommandPalette, type Command } from './CommandPalette';
 import { HistoryPanel } from './HistoryPanel';
+import { EmbedDialog } from './EmbedDialog';
 import { THEMES, setTheme } from '@/lib/theme';
 import { DEFAULT_SIZES, clampSize, loadSizes, saveSizes, type PanelSizes } from '@/lib/layout';
 import { htmlFiles } from '@/lib/preview';
@@ -137,6 +138,7 @@ export function Playground({ slug }: Props) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [embedOpen, setEmbedOpen] = useState(false);
   const [visibility, setVisibilityState] = useState<Visibility>('UNLISTED');
   const [ownerLogin, setOwnerLogin] = useState<string | null>(null);
   const [stars, setStars] = useState({ starCount: 0, starredByMe: false });
@@ -768,6 +770,11 @@ export function Playground({ slug }: Props) {
               <button onClick={fork} disabled={busy} title="Make your own copy of this project" className={SECONDARY_BUTTON}>
                 ⑂ Fork
               </button>
+              {visibility !== 'PRIVATE' && (
+                <button onClick={() => setEmbedOpen(true)} title="Put this project on another website" className={SECONDARY_BUTTON}>
+                  &lt;/&gt; Embed
+                </button>
+              )}
             </>
           )}
         </div>
@@ -1076,6 +1083,7 @@ export function Playground({ slug }: Props) {
         onShowShortcuts={() => setShortcutsOpen(true)}
       />
       {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+      {embedOpen && slug && <EmbedDialog slug={slug} onClose={() => setEmbedOpen(false)} />}
       {historyOpen && slug && (
         <HistoryPanel
           slug={slug}
