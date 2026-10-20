@@ -12,6 +12,7 @@ public class IdentityDb(DbContextOptions<IdentityDb> options) : DbContext(option
         {
             user.ToTable("users");
             user.HasIndex(u => u.GitHubId).IsUnique();
+            user.HasIndex(u => u.GoogleId).IsUnique();
         });
     }
 }

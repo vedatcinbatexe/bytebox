@@ -3,19 +3,13 @@ using System.Text.Json.Serialization;
 
 namespace Identity.Auth;
 
-public record GitHubProfile(
-    [property: JsonPropertyName("id")] long Id,
-    [property: JsonPropertyName("login")] string Login,
-    [property: JsonPropertyName("name")] string? Name,
-    [property: JsonPropertyName("avatar_url")] string AvatarUrl);
-
-// Talks to GitHub for the OAuth "authorization code" flow
-public class GitHubClient(HttpClient http, IConfiguration config)
+public class GitHubClient(HttpClient http, IConfiguration config) : IOAuthProvider
 {
     private readonly string _clientId = config["GitHub:ClientId"] ?? "";
     private readonly string _clientSecret = config["GitHub:ClientSecret"] ?? "";
     private readonly string _redirectUri = $"{config["PublicUrl"] ?? "http://localhost:5001"}/auth/github/callback";
 
+    public string Name => "github";
     public bool IsConfigured => _clientId != "" && _clientSecret != "";
 
     public string AuthorizeUrl(string state) =>
@@ -26,7 +20,7 @@ public class GitHubClient(HttpClient http, IConfiguration config)
         $"&state={Uri.EscapeDataString(state)}";
 
     // Exchange the code from GitHub's redirect for an access token, then read the user's profile
-    public async Task<GitHubProfile?> GetProfileAsync(string code)
+    public async Task<ExternalProfile?> GetProfileAsync(string code)
     {
         var tokenRequest = new HttpRequestMessage(HttpMethod.Post, "https://github.com/login/oauth/access_token")
         {
@@ -49,8 +43,16 @@ public class GitHubClient(HttpClient http, IConfiguration config)
         userRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         var userResponse = await http.SendAsync(userRequest);
         if (!userResponse.IsSuccessStatusCode) return null;
-        return await userResponse.Content.ReadFromJsonAsync<GitHubProfile>();
+
+        var user = await userResponse.Content.ReadFromJsonAsync<GitHubUser>();
+        return user is null ? null : new ExternalProfile(Name, user.Id.ToString(), user.Login, user.Name, user.AvatarUrl);
     }
 
     private record AccessTokenResponse([property: JsonPropertyName("access_token")] string? AccessToken);
+
+    private record GitHubUser(
+        [property: JsonPropertyName("id")] long Id,
+        [property: JsonPropertyName("login")] string Login,
+        [property: JsonPropertyName("name")] string? Name,
+        [property: JsonPropertyName("avatar_url")] string AvatarUrl);
 }
