@@ -14,6 +14,8 @@ import {
 import { isRateLimited } from './rateLimit.js';
 import {
   createProject,
+  deleteProject,
+  renameProject,
   getProject,
   listMyProjects,
   updateProject,
@@ -70,6 +72,10 @@ const typeDefs = /* GraphQL */ `
     createProject(input: ProjectInput!, forkedFrom: String): Project!
     "Save changes to a project you own"
     updateProject(slug: String!, input: ProjectInput!): Project!
+    "Rename a project you own"
+    renameProject(slug: String!, title: String!): Project!
+    "Delete a project you own (cannot be undone)"
+    deleteProject(slug: String!): Boolean!
   }
 
   type User {
@@ -241,6 +247,19 @@ export const schema = createSchema<Context>({
         const signedIn = requireUser(user);
         await limitSaves(signedIn.id);
         return createProject({ ...input, ...(forkedFrom ? { forkedFrom } : {}) }, signedIn.id);
+      },
+
+      renameProject: async (_, { slug, title }: { slug: string; title: string }, { user }) => {
+        const signedIn = requireUser(user);
+        await limitSaves(signedIn.id);
+        return renameProject(slug, title, signedIn.id);
+      },
+
+      deleteProject: async (_, { slug }: { slug: string }, { user }) => {
+        const signedIn = requireUser(user);
+        await limitSaves(signedIn.id);
+        await deleteProject(slug, signedIn.id);
+        return true;
       },
 
       updateProject: async (_, { slug, input }: { slug: string; input: ProjectInput }, { user }) => {

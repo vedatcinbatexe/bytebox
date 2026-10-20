@@ -49,6 +49,10 @@ class ProjectInput(Model):
         return self
 
 
+class RenameInput(Model):
+    title: str = Field(min_length=1, max_length=100)
+
+
 class CreateProjectInput(ProjectInput):
     forked_from: str | None = None
 

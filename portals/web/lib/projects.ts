@@ -87,6 +87,17 @@ export async function updateProject(slug: string, input: ProjectInput): Promise<
   return fromApi(data.updateProject);
 }
 
+export async function renameProject(slug: string, title: string): Promise<void> {
+  await request(`mutation Rename($slug: String!, $title: String!) { renameProject(slug: $slug, title: $title) { slug } }`, {
+    slug,
+    title,
+  });
+}
+
+export async function deleteProject(slug: string): Promise<void> {
+  await request(`mutation Delete($slug: String!) { deleteProject(slug: $slug) }`, { slug });
+}
+
 export async function fetchMyProjects(): Promise<ProjectSummary[]> {
   const data = await request<{ myProjects: ProjectSummary[] }>(
     '{ myProjects { slug title fileCount updatedAt } }',

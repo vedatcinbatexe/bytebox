@@ -99,3 +99,13 @@ def test_invalid_projects_are_rejected(client):
     ]
     for body in invalid:
         assert client.post("/projects", json=body, headers=ALICE).status_code == 422, body
+
+
+def test_only_the_owner_can_rename(client):
+    slug = create(client)["slug"]
+    assert client.patch(f"/projects/{slug}", json={"title": "New name"}, headers=BOB).status_code == 403
+    assert client.patch(f"/projects/{slug}", json={"title": ""}, headers=ALICE).status_code == 422
+    response = client.patch(f"/projects/{slug}", json={"title": "New name"}, headers=ALICE)
+    assert response.status_code == 200
+    assert response.json()["title"] == "New name"
+    assert response.json()["files"] == PROJECT["files"]  # files untouched
