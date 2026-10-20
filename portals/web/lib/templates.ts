@@ -1,25 +1,31 @@
-// Starter code shown the first time a language is picked
-export const TEMPLATES: Record<string, string> = {
-  python: `name = input()
-print(f"Hello, {name}!")
+import type { Project } from './project';
+
+// Shown the first time someone opens Bytebox
+export const STARTER_PROJECT: Project = {
+  files: {
+    'main.py': `from utils.greet import greet
+
+name = input()
+print(greet(name))
 `,
-  javascript: `const input = require('fs').readFileSync(0, 'utf8').trim();
-console.log(\`Hello, \${input}!\`);
+    'utils/greet.py': `def greet(name):
+    return f"Hello, {name}!"
 `,
-  cpp: `#include <iostream>
+    'hello.js': `const name = require('fs').readFileSync(0, 'utf8').trim();
+console.log(\`Hello from JavaScript, \${name}!\`);
+`,
+    'hello.cpp': `#include <iostream>
 #include <string>
 
 int main() {
     std::string name;
     std::getline(std::cin, name);
-    std::cout << "Hello, " << name << "!" << std::endl;
+    std::cout << "Hello from C++, " << name << "!" << std::endl;
     return 0;
 }
 `,
+  },
+  folders: [],
 };
 
-export const DEFAULT_LANGUAGES = [
-  { id: 'python', name: 'Python' },
-  { id: 'javascript', name: 'JavaScript' },
-  { id: 'cpp', name: 'C++' },
-];
+export const STARTER_FILE = 'main.py';

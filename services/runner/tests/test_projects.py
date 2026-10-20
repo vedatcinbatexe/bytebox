@@ -1,0 +1,94 @@
+"""Integration tests for multi-file projects: these start real Docker containers."""
+
+import sandbox
+from sandbox import run_project
+
+
+def files(**contents):
+    # files(**{"utils/greet.py": "..."}) -> [{"path": ..., "content": ...}]
+    return [{"path": path, "content": content} for path, content in contents.items()]
+
+
+def test_python_imports_from_a_folder():
+    project = files(
+        **{
+            "main.py": "from utils.greet import greet\nprint(greet(input()))",
+            "utils/greet.py": "def greet(name):\n    return f'Hello, {name}!'",
+        }
+    )
+    result = run_project("python", project, "main.py", "Bytebox")
+    assert result["status"] == "completed"
+    assert result["stdout"] == "Hello, Bytebox!\n"
+
+
+def test_python_runs_a_file_inside_a_folder():
+    project = files(
+        **{
+            "main.py": "print('main')",
+            "scripts/other.py": "import helper\nprint(helper.VALUE)",
+            "scripts/helper.py": "VALUE = 'from scripts'",
+        }
+    )
+    result = run_project("python", project, "scripts/other.py")
+    assert result["stdout"] == "from scripts\n"
+
+
+def test_javascript_requires_another_file():
+    project = files(
+        **{
+            "index.js": "const { add } = require('./lib/math');\nconsole.log(add(2, 3));",
+            "lib/math.js": "module.exports = { add: (a, b) => a + b };",
+        }
+    )
+    result = run_project("javascript", project, "index.js")
+    assert result["stdout"] == "5\n"
+
+
+def test_cpp_compiles_other_files_without_main():
+    project = files(
+        **{
+            "main.cpp": '#include <iostream>\n#include "math.h"\nint main() { std::cout << add(2, 3) << std::endl; }',
+            "math.h": "int add(int a, int b);",
+            "math.cpp": '#include "math.h"\nint add(int a, int b) { return a + b; }',
+            "other_program.cpp": "int main() { return 1; }",
+        }
+    )
+    result = run_project("cpp", project, "main.cpp")
+    assert result["status"] == "completed"
+    assert result["stdout"] == "5\n"
+
+
+def test_program_can_read_and_write_project_files():
+    project = files(
+        **{
+            "main.py": "print(open('data/input.txt').read().strip())\nopen('out.txt', 'w').write('ok')",
+            "data/input.txt": "from a text file",
+        }
+    )
+    result = run_project("python", project, "main.py")
+    assert result["stdout"] == "from a text file\n"
+
+
+def test_path_traversal_is_rejected():
+    for bad_path in ["../evil.py", "/etc/passwd", "a/../../b.py", "a//b.py", "a b.py"]:
+        result = run_project("python", files(**{bad_path: "x"}), bad_path)
+        assert result["status"] == "failed", bad_path
+        assert "Invalid file path" in result["stderr"]
+
+
+def test_too_many_files_is_rejected():
+    project = files(**{f"f{i}.py": "" for i in range(sandbox.MAX_FILES + 1)})
+    result = run_project("python", project, "f0.py")
+    assert result["status"] == "failed"
+
+
+def test_project_too_large_is_rejected():
+    project = files(**{"a.py": "#" * 200_000, "b.py": "#" * 100_000})
+    result = run_project("python", project, "a.py")
+    assert result["status"] == "failed"
+
+
+def test_missing_entry_file_is_rejected():
+    result = run_project("python", files(**{"main.py": "print(1)"}), "other.py")
+    assert result["status"] == "failed"
+    assert "Entry file not found" in result["stderr"]

@@ -43,7 +43,7 @@ def test_unknown_language_fails():
 
 
 def test_code_too_large_fails():
-    result = run_code("python", "#" * (sandbox.MAX_CODE_BYTES + 1))
+    result = run_code("python", "#" * (sandbox.MAX_PROJECT_BYTES + 1))
     assert result["status"] == "failed"
 
 

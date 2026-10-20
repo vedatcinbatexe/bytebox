@@ -11,6 +11,7 @@ public class ExecutionDb(DbContextOptions<ExecutionDb> options) : DbContext(opti
         modelBuilder.Entity<Run>(run =>
         {
             run.ToTable("runs");
+            run.OwnsMany(r => r.Files, files => files.ToJson()); // stored as a jsonb column
             run.HasIndex(r => r.UserId);
             run.HasIndex(r => r.CreatedAt);
         });

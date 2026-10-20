@@ -1,15 +1,21 @@
 import type { IncomingMessage } from 'node:http';
 import { createSchema } from 'graphql-yoga';
 import { GraphQLError } from 'graphql';
-import { createRun, getRun, grpc, isGrpcError, streamRun, type GrpcRun } from './execution.js';
+import {
+  createRun,
+  getRun,
+  grpc,
+  isGrpcError,
+  streamRun,
+  type GrpcRun,
+  type ProjectFile,
+} from './execution.js';
 import { isRateLimited } from './rateLimit.js';
 
-const MAX_CODE_BYTES = 64 * 1024;
-
 const languages = [
-  { id: 'python', name: 'Python' },
-  { id: 'javascript', name: 'JavaScript' },
-  { id: 'cpp', name: 'C++' },
+  { id: 'python', name: 'Python', extension: '.py' },
+  { id: 'javascript', name: 'JavaScript', extension: '.js' },
+  { id: 'cpp', name: 'C++', extension: '.cpp' },
 ];
 
 export interface Context {
@@ -35,11 +41,21 @@ const typeDefs = /* GraphQL */ `
   type Language {
     id: String!
     name: String!
+    "File extension that runs with this language, e.g. .py"
+    extension: String!
+  }
+
+  input FileInput {
+    "Relative path, e.g. utils/greet.py"
+    path: String!
+    content: String!
   }
 
   input CreateRunInput {
-    language: String!
-    code: String!
+    "All files of the project"
+    files: [FileInput!]!
+    "Path of the file to run; its extension decides the language"
+    entryFile: String!
     stdin: String
   }
 
@@ -54,6 +70,7 @@ const typeDefs = /* GraphQL */ `
   type Run {
     id: ID!
     language: String!
+    entryFile: String!
     status: RunStatus!
     exitCode: Int
     stdout: String!
@@ -69,6 +86,7 @@ function toRun(run: GrpcRun) {
   return {
     id: run.id,
     language: run.language,
+    entryFile: run.entryFile ?? '',
     status: run.status.toUpperCase(),
     exitCode: run.exitCode ?? null,
     stdout: run.stdout ?? '',
@@ -115,19 +133,10 @@ export const schema = createSchema<Context>({
     Mutation: {
       createRun: async (
         _,
-        { input }: { input: { language: string; code: string; stdin?: string } },
+        { input }: { input: { files: ProjectFile[]; entryFile: string; stdin?: string } },
         { req },
       ) => {
-        if (!languages.some((language) => language.id === input.language)) {
-          throw new GraphQLError(`Unsupported language: ${input.language}`, {
-            extensions: { code: 'BAD_USER_INPUT' },
-          });
-        }
-        if (Buffer.byteLength(input.code) > MAX_CODE_BYTES) {
-          throw new GraphQLError('Code is larger than 64 KB', {
-            extensions: { code: 'BAD_USER_INPUT' },
-          });
-        }
+        // Project rules (paths, limits, language) are checked by the execution service
         if (await isRateLimited(req.socket.remoteAddress ?? 'unknown')) {
           throw new GraphQLError('Too many runs, please wait a minute', {
             extensions: { code: 'RATE_LIMITED' },
@@ -135,7 +144,7 @@ export const schema = createSchema<Context>({
         }
 
         try {
-          const runId = await createRun(input.language, input.code, input.stdin ?? '');
+          const runId = await createRun(input.files, input.entryFile, input.stdin ?? '');
           return toRun(await getRun(runId));
         } catch (error) {
           throw toGraphQLError(error);

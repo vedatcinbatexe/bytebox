@@ -4,6 +4,7 @@ export type RunStatus = 'QUEUED' | 'COMPLETED' | 'TIMED_OUT' | 'MEMORY_EXCEEDED'
 
 export interface Run {
   id: string;
+  entryFile: string;
   status: RunStatus;
   exitCode: number | null;
   stdout: string;
@@ -12,22 +13,21 @@ export interface Run {
   timeMs: number;
 }
 
-export interface Language {
-  id: string;
-  name: string;
+export interface ProjectFile {
+  path: string;
+  content: string;
 }
 
-const RUN_FIELDS = 'id status exitCode stdout stderr truncated timeMs';
+const RUN_FIELDS = 'id entryFile status exitCode stdout stderr truncated timeMs';
 
-export async function fetchLanguages(): Promise<Language[]> {
-  const data = await request<{ languages: Language[] }>('{ languages { id name } }');
-  return data.languages;
-}
-
-export async function createRun(language: string, code: string, stdin: string): Promise<Run> {
+export async function createRun(
+  files: ProjectFile[],
+  entryFile: string,
+  stdin: string,
+): Promise<Run> {
   const data = await request<{ createRun: Run }>(
     `mutation CreateRun($input: CreateRunInput!) { createRun(input: $input) { ${RUN_FIELDS} } }`,
-    { input: { language, code, stdin } },
+    { input: { files, entryFile, stdin } },
   );
   return data.createRun;
 }

@@ -1,4 +1,7 @@
-import base64
+import io
+import re
+import socket
+import tarfile
 import threading
 import time
 
@@ -9,7 +12,8 @@ from requests.exceptions import ConnectionError, ReadTimeout
 
 from languages import LANGUAGES
 
-MAX_CODE_BYTES = 64 * 1024
+MAX_FILES = 50
+MAX_PROJECT_BYTES = 256 * 1024
 MAX_OUTPUT_BYTES = 64 * 1024
 DEFAULT_TIMEOUT_SECONDS = 5
 DEFAULT_MEMORY = "128m"
@@ -32,21 +36,32 @@ def ensure_images():
 
 
 def run_code(language, code, stdin=""):
-    """Run code in a fresh, locked-down container and return the result."""
+    """Run a single piece of code (a project with one file)."""
     config = LANGUAGES.get(language)
     if config is None:
         return failed(f"Unsupported language: {language}")
-    if len(code.encode()) > MAX_CODE_BYTES:
-        return failed(f"Code is larger than {MAX_CODE_BYTES // 1024} KB")
+    entry = "main" + config["extension"]
+    return run_project(language, [{"path": entry, "content": code}], entry, stdin)
+
+
+def run_project(language, files, entry_file, stdin=""):
+    """Run entry_file from a multi-file project in a fresh, locked-down container."""
+    config = LANGUAGES.get(language)
+    if config is None:
+        return failed(f"Unsupported language: {language}")
+    error = validate_project(files, entry_file)
+    if error:
+        return failed(error)
 
     timeout = config.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS)
     memory = config.get("memory", DEFAULT_MEMORY)
+    archive = build_archive(files, stdin)
 
     container = client.containers.create(
         image=config["image"],
-        command=["sh", "-c", build_script(config)],
-        # Code and stdin are passed base64-encoded, so no files need to be copied in
-        environment={"CODE": to_base64(code), "STDIN": to_base64(stdin)},
+        command=["sh", "-c", build_script(config, files, entry_file, len(archive))],
+        # The project arrives as a tar archive on stdin (see send_archive)
+        stdin_open=True,
         working_dir="/tmp",
         labels={"bytebox": "sandbox"},
         # Isolation
@@ -69,6 +84,7 @@ def run_code(language, code, stdin=""):
         output = OutputCollector(container)
         started = time.monotonic()
         container.start()
+        send_archive(container, archive)
         try:
             exit_code = container.wait(timeout=timeout)["StatusCode"]
             status = "completed"
@@ -124,16 +140,73 @@ class OutputCollector:
         self.thread.join(timeout=5)
 
 
-def build_script(config):
-    steps = ["cd /tmp", f'echo "$CODE" | base64 -d > {config["file"]}']
+SAFE_PATH = re.compile(r"^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$")
+CPP_MAIN = re.compile(r"\bint\s+main\s*\(")
+
+
+def validate_project(files, entry_file):
+    """Return an error message, or None if the project is safe to run."""
+    if not files:
+        return "The project has no files"
+    if len(files) > MAX_FILES:
+        return f"A project can have at most {MAX_FILES} files"
+    if sum(len(file["content"].encode()) for file in files) > MAX_PROJECT_BYTES:
+        return f"The project is larger than {MAX_PROJECT_BYTES // 1024} KB"
+    for file in files:
+        path = file["path"]
+        if len(path) > 200 or not SAFE_PATH.match(path) or ".." in path.split("/"):
+            return f"Invalid file path: {path}"
+    if entry_file not in {file["path"] for file in files}:
+        return f"Entry file not found: {entry_file}"
+    return None
+
+
+def build_script(config, files, entry_file, archive_size):
+    # Paths are validated against SAFE_PATH, so they are safe to put in a shell command.
+    # head reads exactly the archive, so we never wait for stdin to be closed.
+    steps = [f"head -c {archive_size} | tar -x -C /tmp -f -", "cd /tmp/project"]
     if "compile" in config:
-        steps.append(config["compile"])
-    steps.append(f'echo -n "$STDIN" | base64 -d | {config["run"]}')
+        # Compile the entry file plus every other C++ file that has no main()
+        others = [
+            file["path"]
+            for file in files
+            if file["path"] != entry_file
+            and file["path"].endswith(config["extension"])
+            and not CPP_MAIN.search(file["content"])
+        ]
+        steps.append(config["compile"].format(sources=" ".join([entry_file, *others])))
+    steps.append(config["run"].format(entry=entry_file) + " < /tmp/.stdin")
     return " && ".join(steps)
 
 
-def to_base64(text):
-    return base64.b64encode(text.encode()).decode()
+def build_archive(files, stdin):
+    """Pack the project (under project/) and stdin (.stdin) into a tar archive."""
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as archive:
+        add_file(archive, ".stdin", stdin)
+        for file in files:
+            add_file(archive, f"project/{file['path']}", file["content"])
+    return buffer.getvalue()
+
+
+def send_archive(container, archive):
+    """Write the archive to the container's stdin."""
+    stream = container.attach_socket(params={"stdin": 1, "stream": 1})
+    try:
+        stream._sock.sendall(archive)
+    finally:
+        # Only end our side; the socket itself is closed when the response is cleaned up
+        stream._sock.shutdown(socket.SHUT_WR)
+
+
+def add_file(archive, name, text):
+    data = text.encode()
+    info = tarfile.TarInfo(name)
+    info.size = len(data)
+    info.mode = 0o644
+    info.uid = info.gid = 65534
+    info.mtime = int(time.time())
+    archive.addfile(info, io.BytesIO(data))
 
 
 def failed(message):

@@ -16,10 +16,16 @@ service ExecutionService {
 }
 
 message CreateRunRequest {
-  string language = 1;
-  string code = 2;
+  reserved 1, 2; // were language and code (single-file runs)
+  repeated ProjectFile files = 5;
+  string entry_file = 6; // path of the file to run, e.g. "main.py" or "src/app.js"
   string stdin = 3;
   string user_id = 4; // optional, empty for anonymous users
+}
+
+message ProjectFile {
+  string path = 1; // relative path, e.g. "utils/greet.py"
+  string content = 2;
 }
 
 message CreateRunResponse {
@@ -41,4 +47,5 @@ message Run {
   int32 time_ms = 8;
   string created_at = 9;  // ISO 8601
   string finished_at = 10; // ISO 8601, empty until finished
+  string entry_file = 11;
 }

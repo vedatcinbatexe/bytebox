@@ -4,7 +4,8 @@ public class Run
 {
     public Guid Id { get; set; }
     public string Language { get; set; } = "";
-    public string Code { get; set; } = "";
+    public string EntryFile { get; set; } = "";
+    public List<ProjectFile> Files { get; set; } = [];
     public string Stdin { get; set; } = "";
     public string? UserId { get; set; }
 
@@ -22,4 +23,10 @@ public class Run
     public const string Queued = "queued";
 
     public bool IsFinished => Status != Queued;
+}
+
+public class ProjectFile
+{
+    public string Path { get; set; } = "";
+    public string Content { get; set; } = "";
 }

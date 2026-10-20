@@ -33,7 +33,15 @@ def main():
     channel.basic_publish(
         exchange="",
         routing_key="run.requested",
-        body=json.dumps({"runId": run_id, "language": language, "code": code, "stdin": stdin}),
+        body=json.dumps(
+            {
+                "runId": run_id,
+                "language": language,
+                "entryFile": os.path.basename(path),
+                "files": [{"path": os.path.basename(path), "content": code}],
+                "stdin": stdin,
+            }
+        ),
     )
     print(f"Sent run {run_id}, waiting for result...")
 
