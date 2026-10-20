@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import type { Project } from '@/lib/project';
+import { terminalTheme, useTheme } from '@/lib/theme';
 import {
   incoming,
   outgoing,
@@ -47,6 +48,13 @@ export function TerminalPanel({ project, onTerminalChanges, onClose }: Props) {
   const [status, setStatus] = useState<'connecting' | 'ready' | 'ended'>('connecting');
   const [endReason, setEndReason] = useState('');
   const [attempt, setAttempt] = useState(0); // bump to restart
+  const terminalRef = useRef<Terminal | null>(null);
+  const theme = useTheme();
+
+  // Recolor the terminal when the theme changes
+  useEffect(() => {
+    if (terminalRef.current) terminalRef.current.options.theme = terminalTheme();
+  }, [theme]);
 
   projectRef.current = project;
   onChangesRef.current = onTerminalChanges;
@@ -79,8 +87,9 @@ export function TerminalPanel({ project, onTerminalChanges, onClose }: Props) {
       terminal = new xterm.Terminal({
         fontSize: 13,
         cursorBlink: true,
-        theme: { background: '#09090b' },
+        theme: terminalTheme(),
       });
+      terminalRef.current = terminal;
       const fit = new fitAddon.FitAddon();
       terminal.loadAddon(fit);
       terminal.open(containerRef.current);
@@ -138,6 +147,7 @@ export function TerminalPanel({ project, onTerminalChanges, onClose }: Props) {
       socket.close();
       observer?.disconnect();
       terminal?.dispose();
+      terminalRef.current = null;
     };
   }, [attempt]);
 
@@ -167,16 +177,16 @@ export function TerminalPanel({ project, onTerminalChanges, onClose }: Props) {
   }, [project, status]);
 
   return (
-    <section className="flex h-72 shrink-0 flex-col border-t border-zinc-800 bg-zinc-950">
-      <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-1.5 text-xs">
-        <h2 className="font-semibold tracking-wide text-zinc-400 uppercase">Terminal</h2>
-        <span className={status === 'ready' ? 'text-emerald-300' : 'text-zinc-500'}>
+    <section className="flex h-72 shrink-0 flex-col border-t border-line bg-panel">
+      <div className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-xs">
+        <h2 className="font-semibold tracking-wide text-muted uppercase">Terminal</h2>
+        <span className={status === 'ready' ? 'text-success' : 'text-subtle'}>
           {status === 'connecting' && 'Starting…'}
           {status === 'ready' && '● Connected'}
           {status === 'ended' && (endReason || 'Disconnected')}
         </span>
         {status === 'ready' && (
-          <span className="text-zinc-500" title="Changes in the terminal show up in the file tree automatically">
+          <span className="text-subtle" title="Changes in the terminal show up in the file tree automatically">
             · files in sync
           </span>
         )}
@@ -184,16 +194,16 @@ export function TerminalPanel({ project, onTerminalChanges, onClose }: Props) {
         {status === 'ended' && (
           <button
             onClick={() => setAttempt((count) => count + 1)}
-            className="rounded px-2 py-0.5 text-zinc-300 hover:bg-zinc-800"
+            className="rounded px-2 py-0.5 text-fg hover:bg-raised"
           >
             Restart
           </button>
         )}
-        <button onClick={onClose} title="Close terminal" className="rounded px-2 py-0.5 text-zinc-300 hover:bg-zinc-800">
+        <button onClick={onClose} title="Close terminal" className="rounded px-2 py-0.5 text-fg hover:bg-raised">
           ✕
         </button>
       </div>
-      <div ref={containerRef} className="min-h-0 flex-1 px-2 py-1" />
+      <div ref={containerRef} className="min-h-0 flex-1 bg-app px-2 py-1" />
     </section>
   );
 }

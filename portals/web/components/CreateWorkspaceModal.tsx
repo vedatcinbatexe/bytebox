@@ -59,17 +59,17 @@ export function CreateWorkspaceModal({ onClose }: Props) {
         aria-labelledby="create-workspace-title"
         onSubmit={create}
         onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-6 shadow-xl"
+        className="w-full max-w-md rounded-lg border border-line bg-panel p-6 shadow-xl"
       >
         <h2 id="create-workspace-title" className="mb-1 text-lg font-semibold">
           Create workspace
         </h2>
-        <p className="mb-4 text-sm text-zinc-400">
-          It starts with one file, <code className="text-emerald-300">{NEW_WORKSPACE_FILE}</code>, that prints
+        <p className="mb-4 text-sm text-muted">
+          It starts with one file, <code className="text-success">{NEW_WORKSPACE_FILE}</code>, that prints
           &quot;hello world&quot;.
         </p>
 
-        <label htmlFor="workspace-name" className="mb-1 block text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+        <label htmlFor="workspace-name" className="mb-1 block text-xs font-semibold tracking-wide text-muted uppercase">
           Name
         </label>
         <input
@@ -79,23 +79,23 @@ export function CreateWorkspaceModal({ onClose }: Props) {
           maxLength={100}
           autoFocus
           placeholder="e.g. My first app"
-          className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-emerald-600"
+          className="w-full rounded border border-line-strong bg-raised px-3 py-2 text-sm outline-none focus:border-accent"
         />
-        {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
+        {error && <p className="mt-2 text-sm text-danger">{error}</p>}
 
         <div className="mt-6 flex justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
             disabled={creating}
-            className="rounded px-4 py-2 text-sm text-zinc-400 hover:bg-zinc-900 disabled:opacity-50"
+            className="rounded px-4 py-2 text-sm text-muted hover:bg-raised disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={creating}
-            className="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+            className="rounded bg-accent px-4 py-2 text-sm font-semibold text-accent-fg hover:bg-accent-hover disabled:opacity-60"
           >
             {creating ? 'Creating…' : 'Create workspace'}
           </button>

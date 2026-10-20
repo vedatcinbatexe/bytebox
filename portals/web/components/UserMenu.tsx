@@ -15,7 +15,7 @@ function Avatar({ user, size }: { user: User; size: number }) {
   // Dev-login users have no GitHub picture
   if (!user.avatarUrl) {
     return (
-      <span style={style} className="flex items-center justify-center rounded-full bg-emerald-700 text-xs font-bold">
+      <span style={style} className="flex items-center justify-center rounded-full bg-accent text-xs font-bold">
         {user.login.slice(0, 1).toUpperCase()}
       </span>
     );
@@ -39,13 +39,13 @@ export function UserMenu({ user, loading }: Props) {
     return () => window.removeEventListener('mousedown', onClick);
   }, [open]);
 
-  if (loading) return <span className="h-8 w-8 animate-pulse rounded-full bg-zinc-800" aria-label="Loading" />;
+  if (loading) return <span className="h-8 w-8 animate-pulse rounded-full bg-raised" aria-label="Loading" />;
 
   if (!user) {
     return (
       <Link
         href={loginPageUrl()}
-        className="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800"
+        className="rounded border border-line-strong px-3 py-1.5 text-sm text-fg hover:bg-raised"
       >
         Log in
       </Link>
@@ -56,7 +56,7 @@ export function UserMenu({ user, loading }: Props) {
     <div ref={menuRef} className="relative">
       <button
         onClick={() => setOpen((value) => !value)}
-        className="flex items-center gap-2 rounded-full border border-zinc-700 py-0.5 pr-3 pl-0.5 text-sm hover:bg-zinc-800"
+        className="flex items-center gap-2 rounded-full border border-line-strong py-0.5 pr-3 pl-0.5 text-sm hover:bg-raised"
         aria-haspopup="menu"
         aria-expanded={open}
         title={`Signed in as ${user.login}`}
@@ -67,13 +67,13 @@ export function UserMenu({ user, loading }: Props) {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-40 mt-2 w-56 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 text-sm shadow-xl"
+          className="absolute right-0 z-40 mt-2 w-56 overflow-hidden rounded-lg border border-line bg-panel text-sm shadow-xl"
         >
-          <div className="flex items-center gap-3 border-b border-zinc-800 p-3">
+          <div className="flex items-center gap-3 border-b border-line p-3">
             <Avatar user={user} size={36} />
             <div className="min-w-0">
               <p className="truncate font-semibold">{user.name}</p>
-              <p className="truncate text-xs text-zinc-400">@{user.login} · signed in</p>
+              <p className="truncate text-xs text-muted">@{user.login} · signed in</p>
             </div>
           </div>
           <button
@@ -82,20 +82,20 @@ export function UserMenu({ user, loading }: Props) {
               setOpen(false);
               setCreating(true);
             }}
-            className="block w-full px-3 py-2 text-left text-emerald-300 hover:bg-zinc-900"
+            className="block w-full px-3 py-2 text-left text-success hover:bg-raised"
           >
             ＋ Create workspace
           </button>
-          <Link href="/projects" role="menuitem" className="block px-3 py-2 hover:bg-zinc-900">
+          <Link href="/projects" role="menuitem" className="block px-3 py-2 hover:bg-raised">
             📁 My projects
           </Link>
-          <Link href="/" role="menuitem" className="block px-3 py-2 hover:bg-zinc-900">
+          <Link href="/" role="menuitem" className="block px-3 py-2 hover:bg-raised">
             ✏️ Workspace
           </Link>
           <a
             href={logoutUrl('/')}
             role="menuitem"
-            className="block border-t border-zinc-800 px-3 py-2 text-red-300 hover:bg-zinc-900"
+            className="block border-t border-line px-3 py-2 text-danger hover:bg-raised"
           >
             Sign out
           </a>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { UserMenu } from '@/components/UserMenu';
+import { ThemePicker } from '@/components/ThemePicker';
 import { CreateWorkspaceModal } from '@/components/CreateWorkspaceModal';
 import { useMe } from '@/lib/auth';
 import { fetchMyProjects, type ProjectSummary } from '@/lib/projects';
@@ -22,10 +23,11 @@ export default function MyProjectsPage() {
 
   return (
     <div className="min-h-dvh">
-      <header className="flex items-center gap-3 border-b border-zinc-800 px-4 py-3">
+      <header className="flex items-center gap-2 border-b border-line bg-panel px-4 py-2.5">
         <Link href="/" className="mr-auto text-lg font-bold">
           📦 Bytebox
         </Link>
+        <ThemePicker />
         <UserMenu user={user} loading={loading} />
       </header>
 
@@ -35,35 +37,35 @@ export default function MyProjectsPage() {
           {user && (
             <button
               onClick={() => setCreating(true)}
-              className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-500"
+              className="rounded bg-accent px-3 py-1.5 text-sm font-semibold text-accent-fg hover:bg-accent-hover"
             >
               ＋ Create workspace
             </button>
           )}
         </div>
 
-        {loading && <p className="text-zinc-500">Loading…</p>}
+        {loading && <p className="text-subtle">Loading…</p>}
 
         {!loading && !user && (
-          <div className="rounded-lg border border-zinc-800 p-8 text-center">
-            <p className="mb-4 text-zinc-400">Log in to see the projects you&apos;ve saved.</p>
+          <div className="rounded-lg border border-line p-8 text-center">
+            <p className="mb-4 text-muted">Log in to see the projects you&apos;ve saved.</p>
             <Link
               href="/login?returnTo=%2Fprojects"
-              className="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+              className="rounded bg-accent px-4 py-2 text-sm font-semibold text-accent-fg hover:bg-accent-hover"
             >
               Log in or sign up
             </Link>
           </div>
         )}
 
-        {error && <p className="text-red-300">{error}</p>}
+        {error && <p className="text-danger">{error}</p>}
 
         {user && projects && projects.length === 0 && (
-          <div className="rounded-lg border border-zinc-800 p-8 text-center text-zinc-400">
+          <div className="rounded-lg border border-line p-8 text-center text-muted">
             <p className="mb-4">No workspaces yet.</p>
             <button
               onClick={() => setCreating(true)}
-              className="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+              className="rounded bg-accent px-4 py-2 text-sm font-semibold text-accent-fg hover:bg-accent-hover"
             >
               ＋ Create your first workspace
             </button>
@@ -71,18 +73,18 @@ export default function MyProjectsPage() {
         )}
 
         {user && projects && projects.length > 0 && (
-          <ul className="divide-y divide-zinc-800 rounded-lg border border-zinc-800">
+          <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-panel">
             {projects.map((project) => (
               <li key={project.slug}>
-                <Link href={`/p/${project.slug}`} className="flex items-center gap-4 px-4 py-3 hover:bg-zinc-900">
+                <Link href={`/p/${project.slug}`} className="flex items-center gap-4 px-4 py-3 hover:bg-raised">
                   <span className="text-xl">📁</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{project.title}</span>
-                    <span className="block text-xs text-zinc-500">
+                    <span className="block text-xs text-subtle">
                       {project.fileCount} {project.fileCount === 1 ? 'file' : 'files'} · /p/{project.slug}
                     </span>
                   </span>
-                  <span className="shrink-0 text-xs text-zinc-500">
+                  <span className="shrink-0 text-xs text-subtle">
                     {new Date(project.updatedAt + (project.updatedAt.endsWith('Z') ? '' : 'Z')).toLocaleString()}
                   </span>
                 </Link>
