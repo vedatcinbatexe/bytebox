@@ -102,12 +102,13 @@ export async function createProject(input: ProjectInput, forkedFrom?: string): P
   return fromApi(data.createProject);
 }
 
-export async function updateProject(slug: string, input: ProjectInput): Promise<SavedProject> {
+// autosave: the project service keeps at most one version every 2 minutes
+export async function updateProject(slug: string, input: ProjectInput, autosave = false): Promise<SavedProject> {
   const data = await request<{ updateProject: ApiProject }>(
-    `mutation UpdateProject($slug: String!, $input: ProjectInput!) {
-      updateProject(slug: $slug, input: $input) { ${PROJECT_FIELDS} }
+    `mutation UpdateProject($slug: String!, $input: ProjectInput!, $autosave: Boolean) {
+      updateProject(slug: $slug, input: $input, autosave: $autosave) { ${PROJECT_FIELDS} }
     }`,
-    { slug, input: toApi(input) },
+    { slug, input: toApi(input), autosave },
   );
   return fromApi(data.updateProject);
 }

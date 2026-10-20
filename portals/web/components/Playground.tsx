@@ -60,6 +60,7 @@ import {
 } from '@/lib/projects';
 
 const STORAGE_KEY = 'bytebox:workspace';
+const AUTOSAVE_KEY = 'bytebox:autosave';
 
 const SECONDARY_BUTTON =
   'rounded border border-line-strong px-2.5 py-1.5 text-sm whitespace-nowrap text-fg hover:bg-raised disabled:cursor-not-allowed disabled:opacity-50';
@@ -132,6 +133,9 @@ export function Playground({ slug }: Props) {
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [isOwner, setIsOwner] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [autosave, setAutosave] = useState(true);
+  const [autosaving, setAutosaving] = useState(false);
+  useEffect(() => setAutosave(load(AUTOSAVE_KEY) !== 'off'), []);
   const [notice, setNotice] = useState<{ text: string; isError: boolean } | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -219,6 +223,30 @@ export function Playground({ slug }: Props) {
   useEffect(() => {
     if (loaded && !slug && user) save(STORAGE_KEY, JSON.stringify(workspace));
   }, [workspace, loaded, slug, user]);
+
+  // Autosave your own project 2 seconds after the last change
+  useEffect(() => {
+    if (!slug || !isOwner || !autosave || !hasUnsavedChanges || busy || autosaving) return;
+    const timer = setTimeout(async () => {
+      setAutosaving(true);
+      try {
+        const input = currentInput();
+        await updateProject(slug, input, true);
+        setSavedSnapshot(snapshot({ ...workspace, ...input }));
+      } catch (saveError) {
+        setAutosave(false); // don't keep failing; the user can save by hand
+        showNotice(`Autosave is off: ${errorMessage(saveError)}`, true);
+      } finally {
+        setAutosaving(false);
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [workspace, slug, isOwner, autosave, hasUnsavedChanges, busy, autosaving]);
+
+  function toggleAutosave(on: boolean) {
+    setAutosave(on);
+    save(AUTOSAVE_KEY, on ? 'on' : 'off');
+  }
 
   // Warn before leaving a shared project with unsaved changes
   useEffect(() => {
@@ -725,8 +753,14 @@ export function Playground({ slug }: Props) {
           )}
           {slug && isOwner && (
             <button onClick={saveChanges} disabled={busy || !hasUnsavedChanges} className={SECONDARY_BUTTON}>
-              {busy ? 'Saving…' : hasUnsavedChanges ? '● Save' : '✓ Saved'}
+              {busy || autosaving ? 'Saving…' : hasUnsavedChanges ? '● Save' : '✓ Saved'}
             </button>
+          )}
+          {slug && isOwner && (
+            <label className="flex items-center gap-1 text-xs whitespace-nowrap text-muted" title="Save 2 seconds after you stop typing">
+              <input type="checkbox" checked={autosave} onChange={(event) => toggleAutosave(event.target.checked)} />
+              Autosave
+            </label>
           )}
           {slug && isOwner && (
             <button onClick={() => setHistoryOpen(true)} className={SECONDARY_BUTTON} title="Earlier versions of this project">
