@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, StringConstraints, model_validator
 from pydantic.alias_generators import to_camel
 
 # Same rules as the execution service and runner
@@ -21,6 +21,19 @@ Path = Annotated[
     StringConstraints(max_length=200, pattern=SAFE_PATH),
     AfterValidator(no_parent_folders),
 ]
+
+
+# A tag is a short lowercase word like "game" or "data-science"
+MAX_TAGS = 5
+Tag = Annotated[
+    str,
+    BeforeValidator(lambda tag: tag.strip().lower() if isinstance(tag, str) else tag),
+    StringConstraints(pattern=r"^[a-z0-9][a-z0-9-]{0,19}$"),
+]
+
+
+def unique(tags: list[str]) -> list[str]:
+    return list(dict.fromkeys(tags))
 
 
 class Model(BaseModel):
@@ -54,10 +67,11 @@ class ProjectInput(Model):
 
 
 class ProjectPatch(Model):
-    """Change the title and/or visibility without touching the files."""
+    """Change the title, visibility and/or tags without touching the files."""
 
     title: str | None = Field(default=None, min_length=1, max_length=100)
     visibility: Visibility | None = None
+    tags: Annotated[list[Tag], AfterValidator(unique)] | None = Field(default=None, max_length=MAX_TAGS)
 
 
 class VersionSummary(Model):
@@ -85,6 +99,7 @@ class Project(ProjectInput):
     visibility: Visibility = "unlisted"
     star_count: int = 0
     starred_by_me: bool = False
+    tags: list[str] = []
     created_at: datetime
     updated_at: datetime
 
@@ -97,6 +112,12 @@ class ProjectSummary(Model):
     visibility: Visibility = "unlisted"
     owner_login: str | None = None
     star_count: int = 0
+    tags: list[str] = []
+
+
+class TagCount(Model):
+    tag: str
+    count: int
 
 
 class StarState(Model):

@@ -239,3 +239,29 @@ def test_explore_can_sort_by_stars(client):
     assert [p["title"] for p in client.get("/explore?sort=stars").json()] == ["Quiet", "Popular"]
     assert client.get("/explore?sort=stars").json()[0]["starCount"] == 2
     assert [p["title"] for p in client.get("/explore").json()] == ["Popular", "Quiet"]  # newest first
+
+
+def test_owner_sets_tags_and_explore_filters_by_tag(client):
+    game = create(client)["slug"]
+    other = create(client)["slug"]
+    for slug in (game, other):
+        client.patch(f"/projects/{slug}", json={"visibility": "public"}, headers=ALICE)
+
+    response = client.patch(f"/projects/{game}", json={"tags": [" Game ", "python", "game"]}, headers=ALICE)
+    assert response.status_code == 200, response.text
+    assert response.json()["tags"] == ["game", "python"]  # cleaned up and without duplicates
+    client.patch(f"/projects/{other}", json={"tags": ["python"]}, headers=ALICE)
+
+    assert [p["slug"] for p in client.get("/explore?tag=game").json()] == [game]
+    assert client.get("/explore?tag=game").json()[0]["tags"] == ["game", "python"]
+    assert client.get("/tags").json() == [{"tag": "python", "count": 2}, {"tag": "game", "count": 1}]
+    assert client.get("/projects/" + game).json()["title"] == "Greeter"  # tags don't touch the rest
+    assert client.get(f"/projects/{game}/versions", headers=ALICE).json() == []  # nor history
+
+
+def test_tags_are_checked(client):
+    slug = create(client)["slug"]
+    assert client.patch(f"/projects/{slug}", json={"tags": ["no spaces"]}, headers=ALICE).status_code == 422
+    assert client.patch(f"/projects/{slug}", json={"tags": [f"t{n}" for n in range(6)]}, headers=ALICE).status_code == 422
+    assert client.patch(f"/projects/{slug}", json={"tags": ["game"]}, headers=BOB).status_code == 403
+    assert client.patch(f"/projects/{slug}", json={"tags": []}, headers=ALICE).json()["tags"] == []

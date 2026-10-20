@@ -8,6 +8,7 @@ import { DRAG_TYPE, FileTree } from './FileTree';
 import { OutputPanel, isFinished } from './OutputPanel';
 import { MarkdownPanel } from './MarkdownPanel';
 import { PreviewPanel } from './PreviewPanel';
+import { ProjectTags } from './ProjectTags';
 import { TestsPanel } from './TestsPanel';
 import { TESTS_FILE, parseTests, serializeTests } from '@/lib/tests';
 import { SearchPanel } from './SearchPanel';
@@ -54,6 +55,7 @@ import {
   createProject,
   fetchProject,
   setStar,
+  setTags,
   setVisibility,
   updateProject,
   type SavedProject,
@@ -147,6 +149,7 @@ export function Playground({ slug }: Props) {
   const [visibility, setVisibilityState] = useState<Visibility>('UNLISTED');
   const [ownerLogin, setOwnerLogin] = useState<string | null>(null);
   const [stars, setStars] = useState({ starCount: 0, starredByMe: false });
+  const [tags, setTagsState] = useState<string[]>([]);
   const [cursor, setCursor] = useState<{ line: number; column: number } | null>(null);
   const [asideTab, setAsideTab] = useState<'output' | 'tests' | 'preview'>('output');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -203,6 +206,7 @@ export function Playground({ slug }: Props) {
           setVisibilityState(saved.visibility);
           setOwnerLogin(saved.ownerLogin);
           setStars({ starCount: saved.starCount, starredByMe: saved.starredByMe });
+          setTagsState(saved.tags);
           setLoaded(true);
         })
         .catch((loadError) => showNotice(errorMessage(loadError), true));
@@ -334,6 +338,18 @@ export function Playground({ slug }: Props) {
 
   function update(changes: Partial<Workspace>) {
     setWorkspace((current) => ({ ...current, ...changes }));
+  }
+
+  async function changeTags(next: string[]) {
+    if (!slug || !canChange()) return;
+    const previous = tags;
+    setTagsState(next);
+    try {
+      setTagsState(await setTags(slug, next));
+    } catch (tagsError) {
+      setTagsState(previous);
+      showNotice(errorMessage(tagsError), true);
+    }
   }
 
   // Replace in files (from the search panel)
@@ -733,6 +749,7 @@ export function Playground({ slug }: Props) {
             by @{ownerLogin}
           </Link>
         )}
+        {slug && <ProjectTags tags={tags} onChange={isOwner ? changeTags : undefined} />}
         {notice && (
           <span className={`text-xs ${notice.isError ? 'text-danger' : 'text-success'}`}>{notice.text}</span>
         )}

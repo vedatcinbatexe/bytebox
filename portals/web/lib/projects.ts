@@ -20,6 +20,7 @@ export interface SavedProject {
   ownerLogin: string | null;
   starCount: number;
   starredByMe: boolean;
+  tags: string[];
 }
 
 export interface ProjectSummary {
@@ -30,6 +31,7 @@ export interface ProjectSummary {
   visibility: Visibility;
   ownerLogin: string | null;
   starCount: number;
+  tags: string[];
 }
 
 interface ApiProject {
@@ -44,6 +46,7 @@ interface ApiProject {
   ownerLogin: string | null;
   starCount: number;
   starredByMe: boolean;
+  tags: string[];
 }
 
 export interface ProjectInput {
@@ -53,8 +56,8 @@ export interface ProjectInput {
 }
 
 const PROJECT_FIELDS =
-  'slug title files { path content } folders stdin forkedFrom ownedByMe visibility ownerLogin starCount starredByMe';
-const SUMMARY_FIELDS = 'slug title fileCount updatedAt visibility ownerLogin starCount';
+  'slug title files { path content } folders stdin forkedFrom ownedByMe visibility ownerLogin starCount starredByMe tags';
+const SUMMARY_FIELDS = 'slug title fileCount updatedAt visibility ownerLogin starCount tags';
 
 function fromApi(project: ApiProject): SavedProject {
   return {
@@ -71,6 +74,7 @@ function fromApi(project: ApiProject): SavedProject {
     ownerLogin: project.ownerLogin,
     starCount: project.starCount,
     starredByMe: project.starredByMe,
+    tags: project.tags,
   };
 }
 
@@ -178,12 +182,26 @@ export async function fetchProfile(login: string): Promise<UserProfile | null> {
   return data.userProfile;
 }
 
-export async function fetchExplore(sort: 'NEWEST' | 'STARS' = 'NEWEST'): Promise<ProjectSummary[]> {
+export async function fetchExplore(sort: 'NEWEST' | 'STARS' = 'NEWEST', tag?: string): Promise<ProjectSummary[]> {
   const data = await request<{ explore: ProjectSummary[] }>(
-    `query Explore($sort: ExploreSort) { explore(sort: $sort) { ${SUMMARY_FIELDS} } }`,
-    { sort },
+    `query Explore($sort: ExploreSort, $tag: String) { explore(sort: $sort, tag: $tag) { ${SUMMARY_FIELDS} } }`,
+    { sort, tag },
   );
   return data.explore;
+}
+
+export async function fetchPopularTags(): Promise<{ tag: string; count: number }[]> {
+  const data = await request<{ popularTags: { tag: string; count: number }[] }>('{ popularTags { tag count } }');
+  return data.popularTags;
+}
+
+// Replaces the project's tags; returns them cleaned up (lowercase, no duplicates)
+export async function setTags(slug: string, tags: string[]): Promise<string[]> {
+  const data = await request<{ setProjectTags: { tags: string[] } }>(
+    `mutation Tags($slug: String!, $tags: [String!]!) { setProjectTags(slug: $slug, tags: $tags) { tags } }`,
+    { slug, tags },
+  );
+  return data.setProjectTags.tags;
 }
 
 export async function setStar(slug: string, starred: boolean): Promise<{ starCount: number; starredByMe: boolean }> {

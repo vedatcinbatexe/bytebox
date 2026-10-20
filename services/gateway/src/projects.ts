@@ -20,6 +20,7 @@ export interface Project extends ProjectInput {
   visibility: Visibility;
   starCount: number;
   starredByMe: boolean;
+  tags: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -31,6 +32,7 @@ export interface ProjectSummary {
   updatedAt: string;
   visibility: Visibility;
   ownerLogin: string | null;
+  tags: string[];
 }
 
 // userId is only ever set by the gateway, from a verified session
@@ -88,8 +90,32 @@ export async function publicProjectsOf(login: string): Promise<ProjectSummary[]>
   return (await call<ProjectSummary[]>('GET', `/users/${encodeURIComponent(login)}/projects`)) ?? [];
 }
 
-export async function explore(sort: 'newest' | 'stars' = 'newest'): Promise<ProjectSummary[]> {
-  return (await call<ProjectSummary[]>('GET', `/explore?limit=60&sort=${sort}`)) ?? [];
+export async function explore(sort: 'newest' | 'stars' = 'newest', tag?: string): Promise<ProjectSummary[]> {
+  const tagQuery = tag ? `&tag=${encodeURIComponent(tag)}` : '';
+  return (await call<ProjectSummary[]>('GET', `/explore?limit=60&sort=${sort}${tagQuery}`)) ?? [];
+}
+
+export async function popularTags(): Promise<{ tag: string; count: number }[]> {
+  return (await call<{ tag: string; count: number }[]>('GET', '/tags')) ?? [];
+}
+
+const TAG = /^[a-z0-9][a-z0-9-]{0,19}$/;
+export const MAX_TAGS = 5;
+
+export async function setTags(slug: string, tags: string[], userId: string): Promise<Project> {
+  const cleaned = [...new Set(tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean))];
+  if (cleaned.length > MAX_TAGS || !cleaned.every((tag) => TAG.test(tag))) {
+    throw new GraphQLError(
+      `Use up to ${MAX_TAGS} tags made of lowercase letters, numbers and "-" (at most 20 characters each)`,
+      { extensions: { code: 'BAD_USER_INPUT' } },
+    );
+  }
+  const updated = await call<Project>('PATCH', `/projects/${encodeURIComponent(slug)}`, {
+    body: { tags: cleaned },
+    userId,
+  });
+  if (!updated) throw new GraphQLError('Project not found', { extensions: { code: 'NOT_FOUND' } });
+  return updated;
 }
 
 export interface StarState {

@@ -17,6 +17,7 @@ from .models import (
     ProjectSummary,
     StarState,
     ProjectPatch,
+    TagCount,
     Version,
     VersionSummary,
 )
@@ -42,6 +43,7 @@ def summary(document):
         visibility=document.get("visibility", "unlisted"),
         owner_login=document.get("owner_login"),
         star_count=document.get("star_count", 0),
+        tags=document.get("tags", []),
     )
 
 
@@ -69,11 +71,25 @@ def public_projects_of(login: str):
 
 
 @app.get("/explore", response_model=list[ProjectSummary])
-def explore(limit: int = 50, sort: str = "newest"):
-    """Public projects, newest or most starred first."""
+def explore(limit: int = 50, sort: str = "newest", tag: str | None = None):
+    """Public projects, newest or most starred first, optionally with one tag."""
     order = [("star_count", -1), ("updated_at", -1)] if sort == "stars" else [("updated_at", -1)]
-    documents = db.projects.find({"visibility": "public"}).sort(order).limit(min(max(limit, 1), 100))
+    query = {"visibility": "public", **({"tags": tag.lower()} if tag else {})}
+    documents = db.projects.find(query).sort(order).limit(min(max(limit, 1), 100))
     return [summary(document) for document in documents]
+
+
+@app.get("/tags", response_model=list[TagCount])
+def popular_tags(limit: int = 15):
+    """The most used tags on public projects."""
+    pipeline = [
+        {"$match": {"visibility": "public"}},
+        {"$unwind": "$tags"},
+        {"$group": {"_id": "$tags", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1, "_id": 1}},
+        {"$limit": min(max(limit, 1), 50)},
+    ]
+    return [TagCount(tag=row["_id"], count=row["count"]) for row in db.projects.aggregate(pipeline)]
 
 
 @app.post("/projects", status_code=status.HTTP_201_CREATED, response_model=Project)
@@ -160,7 +176,7 @@ def patch_project(slug: Slug, body: ProjectPatch, user_id: UserId = None):
     check_owner(document, require_user(user_id))
     changes = body.model_dump(exclude_none=True)
     if "title" in changes:
-        keep_version(document)  # visibility isn't part of a version, the title is
+        keep_version(document)  # visibility and tags aren't part of a version, the title is
     if changes:
         db.projects.update_one({"_id": slug}, {"$set": {**changes, "updated_at": datetime.now(UTC)}})
     return to_project(find_project(slug))
