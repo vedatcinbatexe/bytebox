@@ -6,6 +6,8 @@ COPY . .
 # The browser calls the gateway directly; Next.js inlines this value at build time
 ARG NEXT_PUBLIC_GATEWAY_URL=http://localhost:4000/graphql
 ENV NEXT_PUBLIC_GATEWAY_URL=$NEXT_PUBLIC_GATEWAY_URL
+ARG NEXT_PUBLIC_TERMINAL_URL=ws://localhost:4100
+ENV NEXT_PUBLIC_TERMINAL_URL=$NEXT_PUBLIC_TERMINAL_URL
 RUN npm run build
 
 FROM node:24-alpine

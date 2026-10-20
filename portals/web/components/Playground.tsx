@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { FileTree } from './FileTree';
 import { OutputPanel } from './OutputPanel';
+import { TerminalPanel } from './TerminalPanel';
 import { createRun, watchRun, type Run } from '@/lib/runs';
 import {
   MAX_FILES,
@@ -16,6 +17,7 @@ import {
   deletePath,
   editorLanguage,
   joinPath,
+  mergeFiles,
   parentFolder,
   renamePath,
   runLanguage,
@@ -100,6 +102,7 @@ export function Playground({ slug }: Props) {
   const [isOwner, setIsOwner] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ text: string; isError: boolean } | null>(null);
+  const [terminalOpen, setTerminalOpen] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState('');
   const [run, setRun] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -299,6 +302,14 @@ export function Playground({ slug }: Props) {
     if (isGone(selectedFolder)) setSelectedFolder('');
   }
 
+  // ---------- Terminal ----------
+
+  function applyPulledFiles(files: { path: string; content: string }[], folders: string[], skipped: string[]) {
+    setWorkspace((current) => ({ ...current, project: mergeFiles(current.project, files, folders) }));
+    const note = skipped.length > 0 ? ` (skipped ${skipped.length} binary or large file(s))` : '';
+    showNotice(`Files refreshed from the terminal${note}`);
+  }
+
   // ---------- Running ----------
 
   async function runActiveFile() {
@@ -427,6 +438,13 @@ export function Playground({ slug }: Props) {
           </>
         )}
         <button
+          onClick={() => setTerminalOpen((open) => !open)}
+          className={SECONDARY_BUTTON}
+          title="Open a shell with your project files"
+        >
+          {terminalOpen ? 'Hide terminal' : '>_ Terminal'}
+        </button>
+        <button
           onClick={runActiveFile}
           disabled={running || !canRun}
           title={canRun ? 'Run the open file (⌘/Ctrl + Enter)' : 'Open a .py, .js or .cpp file'}
@@ -446,9 +464,9 @@ export function Playground({ slug }: Props) {
         </p>
       )}
 
-      <main className="flex min-h-0 flex-1 flex-col md:flex-row">
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         {/* File explorer */}
-        <nav className="flex max-h-48 flex-col border-b border-zinc-800 md:max-h-none md:w-56 md:border-r md:border-b-0">
+        <nav className="flex max-h-48 shrink-0 flex-col border-b border-zinc-800 md:max-h-none md:w-56 md:border-r md:border-b-0">
           <div className="flex items-center gap-1 border-b border-zinc-800 px-3 py-2">
             <h2 className="mr-auto text-xs font-semibold tracking-wide text-zinc-400 uppercase">
               Files
@@ -488,7 +506,7 @@ export function Playground({ slug }: Props) {
         </nav>
 
         {/* Tabs + editor */}
-        <div className="flex min-h-[50vh] min-w-0 flex-1 flex-col border-zinc-800 md:min-h-0 md:border-r">
+        <div className="flex min-w-0 shrink-0 flex-col border-zinc-800 md:min-h-0 md:flex-1 md:shrink md:border-r">
           <div className="flex shrink-0 overflow-x-auto border-b border-zinc-800 text-sm">
             {openTabs.map((tab) => (
               <div
@@ -510,28 +528,37 @@ export function Playground({ slug }: Props) {
               </div>
             ))}
           </div>
-          {activePath && activePath in project.files ? (
-            <Editor
-              path={activePath}
-              language={editorLanguage(activePath)}
-              value={project.files[activePath]}
-              onChange={(value) =>
-                setWorkspace((current) => ({
-                  ...current,
-                  project: updateFile(current.project, activePath, value ?? ''),
-                }))
-              }
-              onMount={onEditorMount}
-              theme="vs-dark"
-              options={{ fontSize: 14, minimap: { enabled: false }, scrollBeyondLastLine: false }}
+          <div className="h-[50vh] md:h-auto md:min-h-0 md:flex-1">
+            {activePath && activePath in project.files ? (
+              <Editor
+                path={activePath}
+                language={editorLanguage(activePath)}
+                value={project.files[activePath]}
+                onChange={(value) =>
+                  setWorkspace((current) => ({
+                    ...current,
+                    project: updateFile(current.project, activePath, value ?? ''),
+                  }))
+                }
+                onMount={onEditorMount}
+                theme="vs-dark"
+                options={{ fontSize: 14, minimap: { enabled: false }, scrollBeyondLastLine: false }}
+              />
+            ) : (
+              <p className="p-6 text-sm text-zinc-500">Open a file from the explorer, or create one.</p>
+            )}
+          </div>
+          {terminalOpen && (
+            <TerminalPanel
+              files={project.files}
+              onPulled={applyPulledFiles}
+              onClose={() => setTerminalOpen(false)}
             />
-          ) : (
-            <p className="p-6 text-sm text-zinc-500">Open a file from the explorer, or create one.</p>
           )}
         </div>
 
         {/* Stdin + output */}
-        <aside className="flex min-h-0 flex-col md:w-[35%]">
+        <aside className="flex min-h-80 shrink-0 flex-col md:min-h-0 md:w-[35%] md:shrink">
           <section className="border-b border-zinc-800">
             <h2 className="px-4 pt-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase">
               Input (stdin)
