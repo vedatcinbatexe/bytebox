@@ -1,0 +1,139 @@
+name: bytebox
+
+services:
+  # ---------- Infrastructure ----------
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bytebox}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bytebox}
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-bytebox}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mongo:
+    image: mongo:8
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-bytebox}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-bytebox}
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6380:6379' # 6379 is often taken by a local Redis
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-bytebox}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-bytebox}
+    ports:
+      - '5673:5672'
+      - '15673:15672' # management UI
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ---------- Services ----------
+  identity:
+    restart: unless-stopped
+    build: ./services/identity
+    environment:
+      ConnectionStrings__Postgres: Host=postgres;Database=identity;Username=${POSTGRES_USER:-bytebox};Password=${POSTGRES_PASSWORD:-bytebox}
+    ports:
+      - '5001:8080'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  execution:
+    restart: unless-stopped
+    build: ./services/execution
+    environment:
+      ConnectionStrings__Postgres: Host=postgres;Database=execution;Username=${POSTGRES_USER:-bytebox};Password=${POSTGRES_PASSWORD:-bytebox}
+      ConnectionStrings__Redis: redis:6379
+      RabbitMq__Url: amqp://${RABBITMQ_USER:-bytebox}:${RABBITMQ_PASSWORD:-bytebox}@rabbitmq:5672
+    ports:
+      - '5002:8080'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  snippet:
+    restart: unless-stopped
+    build: ./services/snippet
+    environment:
+      MONGO_URL: mongodb://${MONGO_USER:-bytebox}:${MONGO_PASSWORD:-bytebox}@mongo:27017
+    ports:
+      - '5003:8000'
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  runner:
+    restart: unless-stopped
+    build: ./services/runner
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-bytebox}:${RABBITMQ_PASSWORD:-bytebox}@rabbitmq:5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  gateway:
+    restart: unless-stopped
+    build: ./services/gateway
+    environment:
+      PORT: 4000
+      IDENTITY_URL: http://identity:8080
+      EXECUTION_URL: http://execution:8080
+      SNIPPET_URL: http://snippet:8000
+      REDIS_URL: redis://redis:6379
+    ports:
+      - '4000:4000'
+    depends_on:
+      - identity
+      - execution
+      - snippet
+      - redis
+
+  # ---------- Portals ----------
+  web:
+    restart: unless-stopped
+    build: ./portals/web
+    environment:
+      GATEWAY_URL: http://gateway:4000
+    ports:
+      - '3000:3000'
+    depends_on:
+      - gateway
+
+volumes:
+  postgres-data:
+  mongo-data:
