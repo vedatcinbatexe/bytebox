@@ -8,6 +8,7 @@ const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: '⌘/Ctrl + S', action: 'Save (your own projects)' },
   { keys: 'Shift + Alt + F', action: 'Format the open file' },
   { keys: '⌘/Ctrl + Shift + F', action: 'Find in files' },
+  { keys: '⌘/Ctrl + B / J', action: 'Hide or show the files / output panel' },
   { keys: '⌘/Ctrl + F', action: 'Find in the open file' },
   { keys: '⌘/Ctrl + Z / Shift + Z', action: 'Undo / redo' },
   { keys: '⌘/Ctrl + /', action: 'Comment or uncomment lines' },

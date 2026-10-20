@@ -9,6 +9,8 @@ interface Props {
   saveState: 'saved' | 'unsaved' | 'local' | 'guest' | 'other';
   onShowShortcuts: () => void;
   onShowSettings: () => void;
+  hidden: { explorer: boolean; aside: boolean };
+  onTogglePanel: (panel: 'explorer' | 'aside') => void;
 }
 
 export const LANGUAGE_NAMES: Record<string, string> = {
@@ -35,9 +37,26 @@ const SAVE_LABELS = {
 };
 
 // Thin bar at the bottom of the IDE
-export function StatusBar({ language, lines, cursor, run, saveState, onShowShortcuts, onShowSettings }: Props) {
+export function StatusBar({
+  language,
+  lines,
+  cursor,
+  run,
+  saveState,
+  onShowShortcuts,
+  onShowSettings,
+  hidden,
+  onTogglePanel,
+}: Props) {
+  const toggle = (active: boolean) => `rounded px-1.5 hover:bg-raised hover:text-fg ${active ? '' : 'text-subtle line-through'}`;
   return (
     <footer className="flex shrink-0 items-center gap-4 overflow-x-auto border-t border-line bg-panel px-3 py-1 text-xs whitespace-nowrap text-muted">
+      <button onClick={() => onTogglePanel('explorer')} className={toggle(!hidden.explorer)} title="Show or hide the file explorer (⌘/Ctrl + B)">
+        ▤ Files
+      </button>
+      <button onClick={() => onTogglePanel('aside')} className={toggle(!hidden.aside)} title="Show or hide the output panel (⌘/Ctrl + J)">
+        ▥ Output
+      </button>
       {language && <span>{LANGUAGE_NAMES[language] ?? language}</span>}
       {cursor && (
         <span>

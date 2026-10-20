@@ -71,6 +71,7 @@ import {
 
 const STORAGE_KEY = 'bytebox:workspace';
 const AUTOSAVE_KEY = 'bytebox:autosave';
+const HIDDEN_PANELS_KEY = 'bytebox:hidden-panels';
 
 const SECONDARY_BUTTON =
   'rounded border border-line-strong px-2.5 py-1.5 text-sm whitespace-nowrap text-fg hover:bg-raised disabled:cursor-not-allowed disabled:opacity-50';
@@ -159,6 +160,34 @@ export function Playground({ slug }: Props) {
   const [tags, setTagsState] = useState<string[]>([]);
   const [cursor, setCursor] = useState<{ line: number; column: number } | null>(null);
   const [asideTab, setAsideTab] = useState<'output' | 'tests' | 'preview'>('output');
+  // Focus mode: hide the file explorer (⌘/Ctrl + B) and/or the output panel (⌘/Ctrl + J)
+  const [hidden, setHidden] = useState({ explorer: false, aside: false });
+  useEffect(() => {
+    try {
+      setHidden({ explorer: false, aside: false, ...JSON.parse(load(HIDDEN_PANELS_KEY) ?? '{}') });
+    } catch {
+      // keep both panels visible
+    }
+  }, []);
+
+  function setPanelHidden(panel: 'explorer' | 'aside', hide: (current: boolean) => boolean) {
+    setHidden((current) => {
+      const next = { ...current, [panel]: hide(current[panel]) };
+      save(HIDDEN_PANELS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function togglePanel(panel: 'explorer' | 'aside') {
+    setPanelHidden(panel, (isHidden) => !isHidden);
+  }
+
+  function showAside(tab: 'output' | 'tests' | 'preview') {
+    setAsideTab(tab);
+    setPanelHidden('aside', () => false);
+  }
+  const togglePanelRef = useRef(togglePanel);
+  togglePanelRef.current = togglePanel;
   const [searchOpen, setSearchOpen] = useState(false);
   const [sizes, setSizes] = useState<PanelSizes>(DEFAULT_SIZES);
   useEffect(() => setSizes(loadSizes()), []);
@@ -396,6 +425,11 @@ export function Playground({ slug }: Props) {
         setPaletteOpen(true);
         return;
       }
+      if ((event.metaKey || event.ctrlKey) && ['b', 'j'].includes(event.key.toLowerCase())) {
+        event.preventDefault();
+        togglePanelRef.current(event.key.toLowerCase() === 'b' ? 'explorer' : 'aside');
+        return;
+      }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault(); // not the browser's "Save page"
         saveShortcutRef.current();
@@ -426,7 +460,7 @@ export function Playground({ slug }: Props) {
       .map((path) => ({ id: `file:${path}`, label: path, group: 'File' as const, run: () => openFile(path) }));
 
     if (isHtmlOpen || isMarkdownOpen) {
-      commands.push(action('preview', `Preview ${activePath}`, () => setAsideTab('preview')));
+      commands.push(action('preview', `Preview ${activePath}`, () => showAside('preview')));
     }
     else if (canRun) commands.push(action('run', `Run ${activePath}`, () => void runActiveFile(), '⌘↵'));
     if (activePath && canFormat(activePath)) {
@@ -443,10 +477,14 @@ export function Playground({ slug }: Props) {
     );
     if (pages.length > 0) {
       commands.push(
-        action('show-preview', 'Show preview', () => setAsideTab('preview')),
-        action('show-output', 'Show output', () => setAsideTab('output')),
+        action('show-preview', 'Show preview', () => showAside('preview')),
+        action('show-output', 'Show output', () => showAside('output')),
       );
     }
+    commands.push(
+      action('toggle-explorer', `${hidden.explorer ? 'Show' : 'Hide'} file explorer`, () => togglePanel('explorer'), '⌘B'),
+      action('toggle-aside', `${hidden.aside ? 'Show' : 'Hide'} output panel`, () => togglePanel('aside'), '⌘J'),
+    );
     if (!slug) commands.push(action('share', 'Share (save and get a link)', () => void share()));
     if (slug && isOwner) {
       commands.push(
@@ -650,6 +688,7 @@ export function Playground({ slug }: Props) {
 
   async function runActiveFile() {
     if (running || !canChange()) return;
+    setPanelHidden('aside', () => false); // show the output
     if (!activePath || !runLanguage(activePath)) {
       setError('Open a .py, .js, .ts, .java, .cpp, .go or .rs file to run it.');
       return;
@@ -707,6 +746,8 @@ export function Playground({ slug }: Props) {
     editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => void formatRef.current());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveShortcutRef.current());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => setPaletteOpen(true));
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyB, () => togglePanelRef.current('explorer'));
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyJ, () => togglePanelRef.current('aside'));
     editor.onDidChangeCursorPosition((event) =>
       setCursor({ line: event.position.lineNumber, column: event.position.column }),
     );
@@ -882,7 +923,7 @@ export function Playground({ slug }: Props) {
           </button>
           {isHtmlOpen || isMarkdownOpen ? (
             <button
-              onClick={() => setAsideTab('preview')}
+              onClick={() => showAside('preview')}
               title={isHtmlOpen ? 'Show the live preview of this page' : 'Show this file rendered'}
               className="max-w-[50vw] truncate rounded bg-accent px-3.5 py-1.5 text-sm font-semibold text-accent-fg hover:bg-accent-hover"
             >
@@ -891,7 +932,7 @@ export function Playground({ slug }: Props) {
           ) : (
             <button
               onClick={() => {
-                setAsideTab('output');
+                showAside('output');
                 void runActiveFile();
               }}
               disabled={running || !canRun}
@@ -935,6 +976,7 @@ export function Playground({ slug }: Props) {
 
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         {/* File explorer */}
+        {!hidden.explorer && (
         <nav
           className="flex max-h-48 shrink-0 flex-col border-b border-line bg-panel md:max-h-none md:w-(--explorer-w) md:border-b-0"
           style={{ '--explorer-w': `${sizes.explorer}px` } as React.CSSProperties}
@@ -1005,12 +1047,15 @@ export function Playground({ slug }: Props) {
           )}
         </nav>
 
-        <ResizeHandle
-          direction="x"
-          label="Resize the file explorer"
-          onResize={(delta) => resize('explorer', delta)}
-          onReset={() => resetSize('explorer')}
-        />
+        )}
+        {!hidden.explorer && (
+          <ResizeHandle
+            direction="x"
+            label="Resize the file explorer"
+            onResize={(delta) => resize('explorer', delta)}
+            onReset={() => resetSize('explorer')}
+          />
+        )}
 
         {/* Tabs + editor */}
         <div className="flex min-w-0 shrink-0 flex-col md:min-h-0 md:flex-1 md:shrink">
@@ -1097,14 +1142,17 @@ export function Playground({ slug }: Props) {
           )}
         </div>
 
-        <ResizeHandle
-          direction="x"
-          label="Resize the output panel"
-          onResize={(delta) => resize('aside', -delta)}
-          onReset={() => resetSize('aside')}
-        />
+        {!hidden.aside && (
+          <ResizeHandle
+            direction="x"
+            label="Resize the output panel"
+            onResize={(delta) => resize('aside', -delta)}
+            onReset={() => resetSize('aside')}
+          />
+        )}
 
         {/* Stdin + output */}
+        {!hidden.aside && (
         <aside
           className="flex min-h-80 shrink-0 flex-col bg-panel md:min-h-0 md:w-(--aside-w) md:max-w-[60vw]"
           style={{ '--aside-w': `${sizes.aside}px` } as React.CSSProperties}
@@ -1163,6 +1211,7 @@ export function Playground({ slug }: Props) {
             </>
           )}
         </aside>
+        )}
       </main>
 
       <StatusBar
@@ -1175,6 +1224,8 @@ export function Playground({ slug }: Props) {
         }
         onShowShortcuts={() => setShortcutsOpen(true)}
         onShowSettings={() => setSettingsOpen(true)}
+        hidden={hidden}
+        onTogglePanel={togglePanel}
       />
       {settingsOpen && (
         <EditorSettingsDialog
