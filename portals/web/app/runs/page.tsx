@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { UserMenu } from '@/components/UserMenu';
 import { ThemePicker } from '@/components/ThemePicker';
-import { STATUS } from '@/components/OutputPanel';
+import { AnsiText, STATUS } from '@/components/OutputPanel';
 import { useMe } from '@/lib/auth';
 import { fetchMyRuns, type RunSummary } from '@/lib/runs';
 
@@ -84,8 +84,8 @@ export default function RunHistoryPage() {
                   </button>
                   {isOpen && (
                     <div className="border-t border-line bg-app px-4 py-3 font-mono text-sm">
-                      {run.stdout && <pre className="whitespace-pre-wrap text-fg">{run.stdout}</pre>}
-                      {run.stderr && <pre className="whitespace-pre-wrap text-danger">{run.stderr}</pre>}
+                      {run.stdout && <AnsiText text={run.stdout} className="text-fg" />}
+                      {run.stderr && <AnsiText text={run.stderr} className="text-danger" />}
                       {!run.stdout && !run.stderr && <p className="text-subtle">No output.</p>}
                       {run.truncated && <p className="mt-2 text-xs text-warning">Output was cut off at 64 KB.</p>}
                     </div>
