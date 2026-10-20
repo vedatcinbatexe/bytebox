@@ -6,7 +6,7 @@ import { UserMenu } from '@/components/UserMenu';
 import { ThemePicker } from '@/components/ThemePicker';
 import { CreateWorkspaceModal } from '@/components/CreateWorkspaceModal';
 import { useMe } from '@/lib/auth';
-import { deleteProject, fetchMyProjects, renameProject, type ProjectSummary } from '@/lib/projects';
+import { VISIBILITY, deleteProject, fetchMyProjects, renameProject, type ProjectSummary } from '@/lib/projects';
 
 export default function MyProjectsPage() {
   const { user, loading } = useMe();
@@ -123,7 +123,10 @@ export default function MyProjectsPage() {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{project.title}</span>
                     <span className="block text-xs text-subtle">
-                      {project.fileCount} {project.fileCount === 1 ? 'file' : 'files'} · /p/{project.slug}
+                      <span title={VISIBILITY[project.visibility].help}>
+                        {VISIBILITY[project.visibility].icon} {VISIBILITY[project.visibility].label}
+                      </span>{' '}
+                      · {project.fileCount} {project.fileCount === 1 ? 'file' : 'files'} · /p/{project.slug}
                     </span>
                   </span>
                   <span className="shrink-0 text-xs text-subtle">

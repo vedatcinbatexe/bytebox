@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 from pydantic.alias_generators import to_camel
@@ -33,6 +33,10 @@ class ProjectFile(Model):
     content: str
 
 
+# public: listed on Explore · unlisted: anyone with the link · private: only the owner
+Visibility = Literal["public", "unlisted", "private"]
+
+
 class ProjectInput(Model):
     title: str = Field(default="Untitled project", min_length=1, max_length=100)
     files: list[ProjectFile] = Field(min_length=1, max_length=MAX_FILES)
@@ -49,8 +53,11 @@ class ProjectInput(Model):
         return self
 
 
-class RenameInput(Model):
-    title: str = Field(min_length=1, max_length=100)
+class ProjectPatch(Model):
+    """Change the title and/or visibility without touching the files."""
+
+    title: str | None = Field(default=None, min_length=1, max_length=100)
+    visibility: Visibility | None = None
 
 
 class VersionSummary(Model):
@@ -67,12 +74,15 @@ class Version(ProjectInput):
 
 class CreateProjectInput(ProjectInput):
     forked_from: str | None = None
+    visibility: Visibility = "unlisted"
 
 
 class Project(ProjectInput):
     slug: str
     forked_from: str | None = None
     owner_id: str | None = None  # user id from the identity service; None for old projects made without login
+    owner_login: str | None = None  # shown on Explore and profiles
+    visibility: Visibility = "unlisted"
     created_at: datetime
     updated_at: datetime
 
@@ -82,3 +92,5 @@ class ProjectSummary(Model):
     title: str
     file_count: int
     updated_at: datetime
+    visibility: Visibility = "unlisted"
+    owner_login: str | None = None

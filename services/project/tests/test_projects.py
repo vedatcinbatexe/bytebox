@@ -155,3 +155,31 @@ def test_only_the_last_30_versions_are_kept(client):
     for number in range(35):
         save(client, slug, f"v{number}")
     assert len(client.get(f"/projects/{slug}/versions", headers=ALICE).json()) == 30
+
+
+def test_projects_are_unlisted_by_default_and_can_be_made_public(client):
+    created = create(client)
+    assert created["visibility"] == "unlisted"
+    assert client.get("/explore").json() == []
+
+    response = client.patch(f"/projects/{created['slug']}", json={"visibility": "public"}, headers=ALICE)
+    assert response.json()["visibility"] == "public"
+    assert response.json()["title"] == "Greeter"  # title untouched
+    assert [p["slug"] for p in client.get("/explore").json()] == [created["slug"]]
+
+
+def test_private_projects_are_hidden_from_everyone_but_the_owner(client):
+    slug = create(client, {**PROJECT, "visibility": "private"})["slug"]
+    assert client.get(f"/projects/{slug}").status_code == 404
+    assert client.get(f"/projects/{slug}", headers=BOB).status_code == 404
+    assert client.get(f"/projects/{slug}", headers=ALICE).status_code == 200
+    # and can't be forked by others
+    fork = client.post("/projects", json={**PROJECT, "forkedFrom": slug}, headers=BOB)
+    assert fork.status_code == 404
+
+
+def test_owner_login_is_stored_for_explore(client):
+    slug = create(client, user={**ALICE, "X-User-Login": "alice"})["slug"]
+    client.patch(f"/projects/{slug}", json={"visibility": "public"}, headers=ALICE)
+    assert client.get("/explore").json()[0]["ownerLogin"] == "alice"
+    assert client.patch(f"/projects/{slug}", json={"visibility": "secret"}, headers=ALICE).status_code == 422

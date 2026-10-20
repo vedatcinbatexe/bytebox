@@ -1,6 +1,14 @@
 import { request } from './graphql';
 import type { Project } from './project';
 
+export type Visibility = 'PUBLIC' | 'UNLISTED' | 'PRIVATE';
+
+export const VISIBILITY: Record<Visibility, { icon: string; label: string; help: string }> = {
+  PUBLIC: { icon: '🌍', label: 'Public', help: 'Anyone can find it on Explore' },
+  UNLISTED: { icon: '🔗', label: 'Unlisted', help: 'Anyone with the link can open it' },
+  PRIVATE: { icon: '🔒', label: 'Private', help: 'Only you can open it' },
+};
+
 export interface SavedProject {
   slug: string;
   title: string;
@@ -8,6 +16,8 @@ export interface SavedProject {
   stdin: string;
   forkedFrom: string | null;
   ownedByMe: boolean;
+  visibility: Visibility;
+  ownerLogin: string | null;
 }
 
 export interface ProjectSummary {
@@ -15,6 +25,8 @@ export interface ProjectSummary {
   title: string;
   fileCount: number;
   updatedAt: string;
+  visibility: Visibility;
+  ownerLogin: string | null;
 }
 
 interface ApiProject {
@@ -25,6 +37,8 @@ interface ApiProject {
   stdin: string;
   forkedFrom: string | null;
   ownedByMe: boolean;
+  visibility: Visibility;
+  ownerLogin: string | null;
 }
 
 export interface ProjectInput {
@@ -33,7 +47,8 @@ export interface ProjectInput {
   stdin: string;
 }
 
-const PROJECT_FIELDS = 'slug title files { path content } folders stdin forkedFrom ownedByMe';
+const PROJECT_FIELDS = 'slug title files { path content } folders stdin forkedFrom ownedByMe visibility ownerLogin';
+const SUMMARY_FIELDS = 'slug title fileCount updatedAt visibility ownerLogin';
 
 function fromApi(project: ApiProject): SavedProject {
   return {
@@ -46,6 +61,8 @@ function fromApi(project: ApiProject): SavedProject {
     stdin: project.stdin,
     forkedFrom: project.forkedFrom,
     ownedByMe: project.ownedByMe,
+    visibility: project.visibility,
+    ownerLogin: project.ownerLogin,
   };
 }
 
@@ -131,7 +148,19 @@ export async function restoreVersion(slug: string, id: string): Promise<SavedPro
 
 export async function fetchMyProjects(): Promise<ProjectSummary[]> {
   const data = await request<{ myProjects: ProjectSummary[] }>(
-    '{ myProjects { slug title fileCount updatedAt } }',
+    `{ myProjects { ${SUMMARY_FIELDS} } }`,
   );
   return data.myProjects;
+}
+
+export async function fetchExplore(): Promise<ProjectSummary[]> {
+  const data = await request<{ explore: ProjectSummary[] }>(`{ explore { ${SUMMARY_FIELDS} } }`);
+  return data.explore;
+}
+
+export async function setVisibility(slug: string, visibility: Visibility): Promise<void> {
+  await request(
+    `mutation Visibility($slug: String!, $visibility: Visibility!) { setProjectVisibility(slug: $slug, visibility: $visibility) { slug } }`,
+    { slug, visibility },
+  );
 }

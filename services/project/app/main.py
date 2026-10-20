@@ -14,7 +14,7 @@ from .models import (
     Project,
     ProjectInput,
     ProjectSummary,
-    RenameInput,
+    ProjectPatch,
     Version,
     VersionSummary,
 )
@@ -27,6 +27,18 @@ SLUG_LENGTH = 8
 Slug = Annotated[str, Path(pattern=f"^[A-Za-z0-9]{{{SLUG_LENGTH}}}$")]
 # Set by the gateway from a verified session. Only the gateway may call this service directly.
 UserId = Annotated[str | None, Header(alias="X-User-Id")]
+UserLogin = Annotated[str | None, Header(alias="X-User-Login")]
+
+
+def summary(document):
+    return ProjectSummary(
+        slug=document["_id"],
+        title=document["title"],
+        file_count=len(document["files"]),
+        updated_at=document["updated_at"],
+        visibility=document.get("visibility", "unlisted"),
+        owner_login=document.get("owner_login"),
+    )
 
 
 @app.get("/health")
@@ -38,25 +50,32 @@ def health():
 def list_my_projects(user_id: UserId = None):
     owner = require_user(user_id)
     documents = db.projects.find({"owner_id": owner}).sort("updated_at", -1).limit(100)
-    return [
-        ProjectSummary(
-            slug=document["_id"],
-            title=document["title"],
-            file_count=len(document["files"]),
-            updated_at=document["updated_at"],
-        )
-        for document in documents
-    ]
+    return [summary(document) for document in documents]
+
+
+@app.get("/explore", response_model=list[ProjectSummary])
+def explore(limit: int = 50):
+    """Newest public projects."""
+    documents = db.projects.find({"visibility": "public"}).sort("updated_at", -1).limit(min(max(limit, 1), 100))
+    return [summary(document) for document in documents]
 
 
 @app.post("/projects", status_code=status.HTTP_201_CREATED, response_model=Project)
-def create_project(body: CreateProjectInput, user_id: UserId = None):
+def create_project(body: CreateProjectInput, user_id: UserId = None, user_login: UserLogin = None):
     owner = require_user(user_id)
-    if body.forked_from and not db.projects.find_one({"_id": body.forked_from}, {"_id": 1}):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "The project to fork was not found")
+    if body.forked_from:
+        original = db.projects.find_one({"_id": body.forked_from}, {"owner_id": 1, "visibility": 1})
+        if original is None or not can_view(original, owner):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "The project to fork was not found")
 
     now = datetime.now(UTC)
-    document = {**body.model_dump(), "owner_id": owner, "created_at": now, "updated_at": now}
+    document = {
+        **body.model_dump(),
+        "owner_id": owner,
+        "owner_login": user_login,
+        "created_at": now,
+        "updated_at": now,
+    }
 
     # Retry in the very unlikely case the random slug is already taken
     for _ in range(5):
@@ -70,8 +89,11 @@ def create_project(body: CreateProjectInput, user_id: UserId = None):
 
 
 @app.get("/projects/{slug}", response_model=Project)
-def get_project(slug: Slug):
-    return to_project(find_project(slug))
+def get_project(slug: Slug, user_id: UserId = None):
+    document = find_project(slug)
+    if not can_view(document, user_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")  # don't reveal private projects
+    return to_project(document)
 
 
 @app.put("/projects/{slug}", response_model=Project)
@@ -84,11 +106,14 @@ def update_project(slug: Slug, body: ProjectInput, user_id: UserId = None):
 
 
 @app.patch("/projects/{slug}", response_model=Project)
-def rename_project(slug: Slug, body: RenameInput, user_id: UserId = None):
+def patch_project(slug: Slug, body: ProjectPatch, user_id: UserId = None):
     document = find_project(slug)
     check_owner(document, require_user(user_id))
-    keep_version(document)
-    db.projects.update_one({"_id": slug}, {"$set": {"title": body.title, "updated_at": datetime.now(UTC)}})
+    changes = body.model_dump(exclude_none=True)
+    if "title" in changes:
+        keep_version(document)  # visibility isn't part of a version, the title is
+    if changes:
+        db.projects.update_one({"_id": slug}, {"$set": {**changes, "updated_at": datetime.now(UTC)}})
     return to_project(find_project(slug))
 
 
@@ -163,6 +188,10 @@ def require_user(user_id):
     if not user_id:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sign in first")
     return user_id
+
+
+def can_view(document, user_id):
+    return document.get("visibility", "unlisted") != "private" or document.get("owner_id") == user_id
 
 
 def find_project(slug):

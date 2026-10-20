@@ -45,7 +45,15 @@ import {
 import { STARTER_FILE, STARTER_PROJECT } from '@/lib/templates';
 import { load, save } from '@/lib/storage';
 import { applyChanges, type TerminalChanges } from '@/lib/terminalSync';
-import { createProject, fetchProject, updateProject, type SavedProject } from '@/lib/projects';
+import {
+  VISIBILITY,
+  createProject,
+  fetchProject,
+  setVisibility,
+  updateProject,
+  type SavedProject,
+  type Visibility,
+} from '@/lib/projects';
 
 const STORAGE_KEY = 'bytebox:workspace';
 
@@ -126,6 +134,7 @@ export function Playground({ slug }: Props) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [visibility, setVisibilityState] = useState<Visibility>('UNLISTED');
   const [cursor, setCursor] = useState<{ line: number; column: number } | null>(null);
   const [asideTab, setAsideTab] = useState<'output' | 'preview'>('output');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -179,6 +188,7 @@ export function Playground({ slug }: Props) {
           setWorkspace(opened);
           setSavedSnapshot(snapshot(opened));
           setIsOwner(saved.ownedByMe);
+          setVisibilityState(saved.visibility);
           setLoaded(true);
         })
         .catch((loadError) => showNotice(errorMessage(loadError), true));
@@ -374,6 +384,7 @@ export function Playground({ slug }: Props) {
       })),
       { id: 'go:projects', label: 'My projects', group: 'Go to', run: () => router.push('/projects') },
       { id: 'go:runs', label: 'Run history', group: 'Go to', run: () => router.push('/runs') },
+      { id: 'go:explore', label: 'Explore public projects', group: 'Go to', run: () => router.push('/explore') },
     );
     return commands;
   }
@@ -651,6 +662,9 @@ export function Playground({ slug }: Props) {
         <Link href="/" className="mr-1 text-lg font-bold whitespace-nowrap" title="Your local workspace">
           📦 Bytebox
         </Link>
+        <Link href="/explore" className="hidden text-sm text-muted hover:text-fg sm:inline" title="Public projects">
+          Explore
+        </Link>
         <input
           value={title}
           onChange={(event) => update({ title: event.target.value })}
@@ -687,6 +701,30 @@ export function Playground({ slug }: Props) {
             <button onClick={() => setHistoryOpen(true)} className={SECONDARY_BUTTON} title="Earlier versions of this project">
               🕘 History
             </button>
+          )}
+          {slug && isOwner && (
+            <select
+              value={visibility}
+              onChange={async (event) => {
+                const next = event.target.value as Visibility;
+                try {
+                  await setVisibility(slug, next);
+                  setVisibilityState(next);
+                  showNotice(`${VISIBILITY[next].label}: ${VISIBILITY[next].help.toLowerCase()}`);
+                } catch (visibilityError) {
+                  showNotice((visibilityError as Error).message, true);
+                }
+              }}
+              aria-label="Who can see this project"
+              title={VISIBILITY[visibility].help}
+              className="rounded border border-line-strong bg-panel px-2 py-1.5 text-sm text-fg hover:bg-raised"
+            >
+              {(Object.keys(VISIBILITY) as Visibility[]).map((option) => (
+                <option key={option} value={option}>
+                  {VISIBILITY[option].icon} {VISIBILITY[option].label}
+                </option>
+              ))}
+            </select>
           )}
           {slug && (
             <>
