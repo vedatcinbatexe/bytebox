@@ -357,4 +357,75 @@ public class Main {
 `,
     },
   },
+  {
+    id: 'go',
+    name: 'Go',
+    description: 'main.go using a function from a second file, with input.',
+    icon: '🐹',
+    stdin: 'Gopher',
+    files: {
+      'main.go': `package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+)
+
+func main() {
+	name := "world"
+	scanner := bufio.NewScanner(os.Stdin)
+	if scanner.Scan() {
+		name = scanner.Text()
+	}
+	fmt.Printf("Hello, %s!\n", name)
+	fmt.Println("Squares:", squares(5))
+}
+`,
+      'squares.go': `package main
+
+func squares(n int) []int {
+	result := make([]int, n)
+	for i := range result {
+		result[i] = (i + 1) * (i + 1)
+	}
+	return result
+}
+`,
+    },
+  },
+  {
+    id: 'rust',
+    name: 'Rust',
+    description: 'main.rs with a module in a second file, with input.',
+    icon: '🦀',
+    stdin: 'Ferris',
+    files: {
+      'main.rs': `mod shapes;
+
+use std::io::stdin;
+
+fn main() {
+    let mut name = String::new();
+    stdin().read_line(&mut name).unwrap();
+    let name = if name.trim().is_empty() { "world" } else { name.trim() };
+    println!("Hello, {name}!");
+
+    let square = shapes::Rectangle { width: 3.0, height: 3.0 };
+    println!("Area of the square: {}", square.area());
+}
+`,
+      'shapes.rs': `pub struct Rectangle {
+    pub width: f64,
+    pub height: f64,
+}
+
+impl Rectangle {
+    pub fn area(&self) -> f64 {
+        self.width * self.height
+    }
+}
+`,
+    },
+  },
 );

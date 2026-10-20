@@ -186,9 +186,11 @@ sequenceDiagram
 | TypeScript | `.ts` | `node:24-alpine` (types stripped by Node 24) | 5 s / 128 MB |
 | Java | `.java` | `eclipse-temurin:25-jdk-alpine` (runs from source; other classes in the project are found automatically) | 10 s / 256 MB |
 | C++ | `.cpp` | `bytebox/sandbox-cpp` (Alpine + g++) | 10 s / 256 MB |
+| Go | `.go` | `bytebox/sandbox-go` (Go 1.25 with the standard library pre-compiled into a read-only build cache; other `.go` files in the entry's folder are built with it) | 10 s / 256 MB |
+| Rust | `.rs` | `rust:1-slim` (`rustc -O`; other files are found through `mod name;`) | 10 s / 256 MB |
 | HTML/CSS/JS | `.html` | — (live preview in the browser) | — |
 
-> Go was considered but left out: every run starts with an empty build cache, and compiling Go's standard library on half a CPU takes ~10 s. It needs a pre-warmed cache image first.
+> A cold Go build compiles the standard library first (~15 s on half a CPU). `bytebox/sandbox-go` runs `go build std` at image build time, so a run only compiles the user's code (< 1 s).
 
 ## 5. Sandbox Security Model
 

@@ -23,6 +23,8 @@ const RUNNABLE: Record<string, string> = {
   '.ts': 'typescript',
   '.java': 'java',
   '.cpp': 'cpp',
+  '.go': 'go',
+  '.rs': 'rust',
 };
 const EDITOR_LANGUAGES: Record<string, string> = {
   ...RUNNABLE,

@@ -1,5 +1,5 @@
 # Each language runs inside its own Docker image.
-# {entry} is the file to run, {sources} the C++ files to compile.
+# {entry} is the file to run, {sources} the files to compile (see build_script in sandbox.py).
 # Optional per-language limits override the defaults in sandbox.py.
 LANGUAGES = {
     "python": {
@@ -31,7 +31,28 @@ LANGUAGES = {
         "extension": ".cpp",
         "compile": "g++ -O2 -o /tmp/program {sources}",
         "run": "/tmp/program",
+        "main": r"\bint\s+main\s*\(",
         # Compiling C++ needs more time and memory
+        "timeout_seconds": 10,
+        "memory": "256m",
+    },
+    "go": {
+        "image": "bytebox/sandbox-go",
+        "extension": ".go",
+        # All .go files of a package must be in one folder
+        "compile": "go build -o /tmp/program {sources}",
+        "run": "/tmp/program",
+        "main": r"\bfunc\s+main\s*\(",
+        "same_folder": True,
+        "timeout_seconds": 10,
+        "memory": "256m",
+    },
+    "rust": {
+        "image": "rust:1-slim",
+        "extension": ".rs",
+        # rustc finds the other files itself through `mod name;`
+        "compile": "rustc -O -o /tmp/program {entry}",
+        "run": "/tmp/program",
         "timeout_seconds": 10,
         "memory": "256m",
     },
