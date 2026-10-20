@@ -8,6 +8,8 @@ import { FileTree } from './FileTree';
 import { OutputPanel, isFinished } from './OutputPanel';
 import { PreviewPanel } from './PreviewPanel';
 import { SearchPanel } from './SearchPanel';
+import { ResizeHandle } from './ResizeHandle';
+import { DEFAULT_SIZES, clampSize, loadSizes, saveSizes, type PanelSizes } from '@/lib/layout';
 import { htmlFiles } from '@/lib/preview';
 import { downloadZip } from '@/lib/zip';
 import { canFormat, formatCode } from '@/lib/format';
@@ -117,6 +119,24 @@ export function Playground({ slug }: Props) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [asideTab, setAsideTab] = useState<'output' | 'preview'>('output');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [sizes, setSizes] = useState<PanelSizes>(DEFAULT_SIZES);
+  useEffect(() => setSizes(loadSizes()), []);
+
+  function resize(panel: keyof PanelSizes, delta: number) {
+    setSizes((current) => {
+      const next = { ...current, [panel]: clampSize(panel, current[panel] + delta) };
+      saveSizes(next);
+      return next;
+    });
+  }
+
+  function resetSize(panel: keyof PanelSizes) {
+    setSizes((current) => {
+      const next = { ...current, [panel]: DEFAULT_SIZES[panel] };
+      saveSizes(next);
+      return next;
+    });
+  }
   // A search result to select once its file is open in the editor
   const pendingReveal = useRef<{ path: string; line: number; column: number; length: number } | null>(null);
   const [selectedFolder, setSelectedFolder] = useState('');
@@ -631,7 +651,10 @@ export function Playground({ slug }: Props) {
 
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         {/* File explorer */}
-        <nav className="flex max-h-48 shrink-0 flex-col border-b border-line bg-panel md:max-h-none md:w-56 md:border-r md:border-b-0">
+        <nav
+          className="flex max-h-48 shrink-0 flex-col border-b border-line bg-panel md:max-h-none md:w-(--explorer-w) md:border-b-0"
+          style={{ '--explorer-w': `${sizes.explorer}px` } as React.CSSProperties}
+        >
           <div className="flex items-center gap-1 border-b border-line px-3 py-2">
             <h2 className="mr-auto text-xs font-semibold tracking-wide text-muted uppercase">
               {searchOpen ? 'Search' : 'Files'}
@@ -682,8 +705,15 @@ export function Playground({ slug }: Props) {
           )}
         </nav>
 
+        <ResizeHandle
+          direction="x"
+          label="Resize the file explorer"
+          onResize={(delta) => resize('explorer', delta)}
+          onReset={() => resetSize('explorer')}
+        />
+
         {/* Tabs + editor */}
-        <div className="flex min-w-0 shrink-0 flex-col border-line md:min-h-0 md:flex-1 md:shrink md:border-r">
+        <div className="flex min-w-0 shrink-0 flex-col md:min-h-0 md:flex-1 md:shrink">
           <div className="flex shrink-0 border-b border-line bg-panel text-sm">
             <div className="flex min-w-0 flex-1 overflow-x-auto">
               {openTabs.map((tab) => (
@@ -747,16 +777,35 @@ export function Playground({ slug }: Props) {
             )}
           </div>
           {terminalOpen && (
-            <TerminalPanel
-              project={project}
-              onTerminalChanges={applyTerminalChanges}
-              onClose={() => setTerminalOpen(false)}
-            />
+            <>
+              <ResizeHandle
+                direction="y"
+                label="Resize the terminal"
+                onResize={(delta) => resize('terminal', -delta)}
+                onReset={() => resetSize('terminal')}
+              />
+              <TerminalPanel
+                project={project}
+                onTerminalChanges={applyTerminalChanges}
+                onClose={() => setTerminalOpen(false)}
+                height={sizes.terminal}
+              />
+            </>
           )}
         </div>
 
+        <ResizeHandle
+          direction="x"
+          label="Resize the output panel"
+          onResize={(delta) => resize('aside', -delta)}
+          onReset={() => resetSize('aside')}
+        />
+
         {/* Stdin + output */}
-        <aside className="flex min-h-80 shrink-0 flex-col bg-panel md:min-h-0 md:w-[35%] md:shrink">
+        <aside
+          className="flex min-h-80 shrink-0 flex-col bg-panel md:min-h-0 md:w-(--aside-w) md:max-w-[60vw]"
+          style={{ '--aside-w': `${sizes.aside}px` } as React.CSSProperties}
+        >
           {pages.length > 0 && (
             <div role="tablist" className="flex shrink-0 border-b border-line text-sm">
               {(['output', 'preview'] as const).map((tab) => (
