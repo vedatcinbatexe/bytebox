@@ -1188,6 +1188,7 @@ export function Playground({ slug }: Props) {
       {historyOpen && slug && (
         <HistoryPanel
           slug={slug}
+          currentFiles={currentInput().project.files}
           onClose={() => setHistoryOpen(false)}
           onRestored={(saved) => {
             const restored = workspaceFor(saved);
