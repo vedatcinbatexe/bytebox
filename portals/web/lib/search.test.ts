@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { MAX_MATCHES, searchProject } from './search';
+import { MAX_MATCHES, replaceInProject, searchProject } from './search';
 
 const files = {
   'main.py': 'from utils import greet\nprint(greet("Ada"))\nGREET = 1',
@@ -26,4 +26,18 @@ test('empty query finds nothing and results are capped', () => {
   const { total, limited } = searchProject(many, 'x');
   assert.equal(total, MAX_MATCHES);
   assert.equal(limited, true);
+});
+
+test('replaces in every file and returns only the changed ones', () => {
+  const { changed, count } = replaceInProject(files, 'greet', 'welcome');
+  assert.equal(count, 4); // GREET matches too: case-insensitive
+  assert.deepEqual(Object.keys(changed).sort(), ['main.py', 'utils.py']);
+  assert.equal(changed['utils.py'], 'def welcome(name):\n    return "hi " + name');
+});
+
+test('replace can match case, stay in one file and keeps $ in the replacement', () => {
+  const { changed, count } = replaceInProject(files, 'greet', '$&.x(', true, 'main.py');
+  assert.equal(count, 2);
+  assert.equal(changed['main.py'], 'from utils import $&.x(\nprint($&.x(("Ada"))\nGREET = 1');
+  assert.equal(replaceInProject(files, 'a.b', 'z').count, 0); // the query is plain text, not a regex
 });

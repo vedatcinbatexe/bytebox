@@ -336,6 +336,17 @@ export function Playground({ slug }: Props) {
     setWorkspace((current) => ({ ...current, ...changes }));
   }
 
+  // Replace in files (from the search panel)
+  function replaceFiles(changed: Record<string, string>, count: number) {
+    if (!canChange()) return;
+    setWorkspace((current) => ({
+      ...current,
+      project: { ...current.project, files: { ...current.project.files, ...changed } },
+    }));
+    const fileCount = Object.keys(changed).length;
+    showNotice(`Replaced ${count} match${count === 1 ? '' : 'es'} in ${fileCount} file${fileCount === 1 ? '' : 's'}`);
+  }
+
   // ---------- Keyboard: save and shortcuts list ----------
 
   function saveShortcut() {
@@ -923,7 +934,11 @@ export function Playground({ slug }: Props) {
             </button>
           </div>
           {searchOpen ? (
-            <SearchPanel files={project.files} onOpenMatch={openMatch} />
+            <SearchPanel
+              files={project.files}
+              onOpenMatch={openMatch}
+              onReplace={user ? replaceFiles : undefined}
+            />
           ) : (
             <div
               className="min-h-0 flex-1 overflow-auto"

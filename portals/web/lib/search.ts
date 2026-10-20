@@ -41,3 +41,33 @@ export function searchProject(
   }
   return { results, total, limited: false };
 }
+
+// Replace every match (all files, or only `onlyPath`). Returns just the changed files.
+export function replaceInProject(
+  files: Record<string, string>,
+  query: string,
+  replacement: string,
+  caseSensitive = false,
+  onlyPath?: string,
+): { changed: Record<string, string>; count: number } {
+  const changed: Record<string, string> = {};
+  let count = 0;
+  if (!query) return { changed, count };
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(escaped, caseSensitive ? 'g' : 'gi');
+
+  for (const [path, content] of Object.entries(files)) {
+    if (onlyPath !== undefined && path !== onlyPath) continue;
+    let replaced = 0;
+    // A function, so "$&" or "$1" in the replacement are kept as typed
+    const next = content.replace(pattern, () => {
+      replaced += 1;
+      return replacement;
+    });
+    if (replaced > 0) {
+      changed[path] = next;
+      count += replaced;
+    }
+  }
+  return { changed, count };
+}

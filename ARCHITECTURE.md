@@ -515,7 +515,7 @@ flowchart LR
 - [x] **Status bar:** language, cursor position, line count, last run status and time, save state; **⌘/Ctrl + S** saves your own project; **?** or ⌨ Shortcuts opens the keyboard shortcuts list
 - [x] **Resizable panels** (desktop): drag the dividers of the file explorer, output panel and terminal; sizes remembered per browser, double-click resets
 - [x] **Format code:** ✨ Format (tab bar) or Shift + Alt + F formats JavaScript, TypeScript, JSON, CSS, HTML and Markdown with Prettier, loaded only when used; one undo restores the previous version; syntax errors are reported
-- [x] **Find in files:** 🔍 in the file explorer or ⌘/Ctrl + Shift + F; results per file with line numbers and the match highlighted; clicking opens the file and selects the match; **Aa** for case-sensitive
+- [x] **Find in files:** 🔍 in the file explorer or ⌘/Ctrl + Shift + F; results per file with line numbers and the match highlighted; clicking opens the file and selects the match; **Aa** for case-sensitive; **▸ Replace** (signed in): replace every match in one file or in all files (plain text, `$` kept as typed); the changes go through autosave/Save like typing
 - [x] **ZIP:** ⤓ download a workspace as `.zip` (header); import a `.zip` in Create workspace (text files only, safe names, single top-level folder and `__MACOSX`/`.DS_Store` dropped, 50 files / 256 KB, skipped files listed). In the browser with `fflate`.
 - [x] **Manage projects** on My projects: search by name or link, ✎ rename (`PATCH /projects/{slug}`, `renameProject`), 🗑 delete (`deleteProject`), owner only
 - [x] **Run history** page `/runs` (profile menu): last 50 runs with status, file, language, time and date; click to see the output (`ListRuns` gRPC → `myRuns` query)
