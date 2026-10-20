@@ -32,6 +32,12 @@ export interface Context {
   user: SessionUser | null; // from the session cookie
 }
 
+async function limitSaves(userId: string) {
+  if (await isRateLimited(userId, 'saves')) {
+    throw new GraphQLError('Too many saves, please wait a minute', { extensions: { code: 'RATE_LIMITED' } });
+  }
+}
+
 // Running code and changing projects needs a signed-in user
 function requireUser(user: SessionUser | null): SessionUser {
   if (!user) {
@@ -174,6 +180,14 @@ function toGraphQLError(error: unknown): GraphQLError {
       extensions: { code: 'BAD_USER_INPUT' },
     });
   }
+  if (isGrpcError(error, grpc.status.RESOURCE_EXHAUSTED)) {
+    return new GraphQLError((error as grpc.ServiceError).details, {
+      extensions: { code: 'TOO_MANY_RUNS' },
+    });
+  }
+  if (isGrpcError(error, grpc.status.UNAVAILABLE) && (error as grpc.ServiceError).details?.includes('busy')) {
+    return new GraphQLError((error as grpc.ServiceError).details, { extensions: { code: 'BUSY' } });
+  }
   if (isGrpcError(error, grpc.status.NOT_FOUND)) {
     return new GraphQLError('Run not found', { extensions: { code: 'NOT_FOUND' } });
   }
@@ -208,14 +222,21 @@ export const schema = createSchema<Context>({
     },
 
     Mutation: {
-      createProject: (
+      createProject: async (
         _,
         { input, forkedFrom }: { input: ProjectInput; forkedFrom?: string },
         { user },
-      ) => createProject({ ...input, ...(forkedFrom ? { forkedFrom } : {}) }, requireUser(user).id),
+      ) => {
+        const signedIn = requireUser(user);
+        await limitSaves(signedIn.id);
+        return createProject({ ...input, ...(forkedFrom ? { forkedFrom } : {}) }, signedIn.id);
+      },
 
-      updateProject: (_, { slug, input }: { slug: string; input: ProjectInput }, { user }) =>
-        updateProject(slug, input, requireUser(user).id),
+      updateProject: async (_, { slug, input }: { slug: string; input: ProjectInput }, { user }) => {
+        const signedIn = requireUser(user);
+        await limitSaves(signedIn.id);
+        return updateProject(slug, input, signedIn.id);
+      },
 
       createRun: async (
         _,

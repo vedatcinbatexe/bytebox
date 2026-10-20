@@ -9,13 +9,19 @@ using RunMessage = Bytebox.Execution.Grpc.Run;
 
 namespace Execution.Grpc;
 
-public class ExecutionGrpcService(ExecutionDb db, RunQueue queue, IConnectionMultiplexer redis)
+public class ExecutionGrpcService(ExecutionDb db, RunQueue queue, IConnectionMultiplexer redis, IConfiguration config)
     : ExecutionService.ExecutionServiceBase
 {
+    // Fair use: only recent queued runs count, so a run lost by a crashed runner can't block anyone for long
+    private static readonly TimeSpan RecentRuns = TimeSpan.FromMinutes(2);
+    private int MaxRunsPerUser => config.GetValue("Limits:RunsInProgressPerUser", 2);
+    private int MaxQueuedRuns => config.GetValue("Limits:QueuedRuns", 50);
+
     public override async Task<CreateRunResponse> CreateRun(CreateRunRequest request, ServerCallContext context)
     {
         if (ProjectRules.Validate(request) is string error)
             throw new RpcException(new Status(StatusCode.InvalidArgument, error));
+        await CheckFairUseAsync(request.UserId, context.CancellationToken);
 
         var run = new Run
         {
@@ -32,6 +38,24 @@ public class ExecutionGrpcService(ExecutionDb db, RunQueue queue, IConnectionMul
         await queue.PublishRunRequestedAsync(run, context.CancellationToken);
 
         return new CreateRunResponse { RunId = run.Id.ToString() };
+    }
+
+    private async Task CheckFairUseAsync(string userId, CancellationToken cancellationToken)
+    {
+        var since = DateTime.UtcNow - RecentRuns;
+        var queued = db.Runs.Where(r => r.Status == Run.Queued && r.CreatedAt > since);
+
+        if (!string.IsNullOrEmpty(userId) &&
+            await queued.CountAsync(r => r.UserId == userId, cancellationToken) >= MaxRunsPerUser)
+        {
+            throw new RpcException(new Status(StatusCode.ResourceExhausted,
+                $"You already have {MaxRunsPerUser} runs in progress. Wait for one to finish."));
+        }
+        if (await queued.CountAsync(cancellationToken) >= MaxQueuedRuns)
+        {
+            throw new RpcException(new Status(StatusCode.Unavailable,
+                "Bytebox is busy right now. Please try again in a moment."));
+        }
     }
 
     public override async Task<RunMessage> GetRun(GetRunRequest request, ServerCallContext context)
