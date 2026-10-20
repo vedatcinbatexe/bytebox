@@ -13,11 +13,25 @@ export interface ProjectInput {
 export interface Project extends ProjectInput {
   slug: string;
   forkedFrom: string | null;
+  ownerId: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-async function call<T>(method: string, path: string, body?: object, editToken?: string): Promise<T | null> {
+export interface ProjectSummary {
+  slug: string;
+  title: string;
+  fileCount: number;
+  updatedAt: string;
+}
+
+// userId is only ever set by the gateway, from a verified session
+async function call<T>(
+  method: string,
+  path: string,
+  options: { body?: object; editToken?: string; userId?: string } = {},
+): Promise<T | null> {
+  const { body, editToken, userId } = options;
   let response: Response;
   try {
     response = await fetch(`${baseUrl}${path}`, {
@@ -25,6 +39,7 @@ async function call<T>(method: string, path: string, body?: object, editToken?: 
       headers: {
         'Content-Type': 'application/json',
         ...(editToken ? { 'X-Edit-Token': editToken } : {}),
+        ...(userId ? { 'X-User-Id': userId } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -56,18 +71,35 @@ export function getProject(slug: string): Promise<Project | null> {
   return call<Project>('GET', `/projects/${encodeURIComponent(slug)}`);
 }
 
+export function listMyProjects(userId: string): Promise<ProjectSummary[] | null> {
+  return call<ProjectSummary[]>('GET', '/projects', { userId });
+}
+
 export async function createProject(
   input: ProjectInput & { forkedFrom?: string },
+  userId?: string,
 ): Promise<{ project: Project; editToken: string }> {
-  const created = await call<{ project: Project; editToken: string }>('POST', '/projects', input);
+  const created = await call<{ project: Project; editToken: string }>('POST', '/projects', {
+    body: input,
+    userId,
+  });
   if (!created) {
     throw new GraphQLError('The project to fork was not found', { extensions: { code: 'NOT_FOUND' } });
   }
   return created;
 }
 
-export async function updateProject(slug: string, editToken: string, input: ProjectInput): Promise<Project> {
-  const updated = await call<Project>('PUT', `/projects/${encodeURIComponent(slug)}`, input, editToken);
+export async function updateProject(
+  slug: string,
+  input: ProjectInput,
+  editToken?: string,
+  userId?: string,
+): Promise<Project> {
+  const updated = await call<Project>('PUT', `/projects/${encodeURIComponent(slug)}`, {
+    body: input,
+    editToken,
+    userId,
+  });
   if (!updated) {
     throw new GraphQLError('Project not found', { extensions: { code: 'NOT_FOUND' } });
   }

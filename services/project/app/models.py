@@ -56,7 +56,15 @@ class CreateProjectInput(ProjectInput):
 class Project(ProjectInput):
     slug: str
     forked_from: str | None = None
+    owner_id: str | None = None  # user id from the identity service; None for projects made without login
     created_at: datetime
+    updated_at: datetime
+
+
+class ProjectSummary(Model):
+    slug: str
+    title: str
+    file_count: int
     updated_at: datetime
 
 

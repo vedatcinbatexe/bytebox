@@ -11,7 +11,15 @@ import {
   type ProjectFile,
 } from './execution.js';
 import { isRateLimited } from './rateLimit.js';
-import { createProject, getProject, updateProject, type ProjectInput } from './projects.js';
+import {
+  createProject,
+  getProject,
+  listMyProjects,
+  updateProject,
+  type Project,
+  type ProjectInput,
+} from './projects.js';
+import type { SessionUser } from './auth.js';
 
 const languages = [
   { id: 'python', name: 'Python', extension: '.py' },
@@ -21,6 +29,7 @@ const languages = [
 
 export interface Context {
   req: IncomingMessage;
+  user: SessionUser | null; // from the session cookie
 }
 
 const typeDefs = /* GraphQL */ `
@@ -30,14 +39,32 @@ const typeDefs = /* GraphQL */ `
     run(id: ID!): Run
     "A shared project, or null if the link is unknown"
     project(slug: String!): Project
+    "The signed-in user, or null"
+    me: User
+    "Projects owned by the signed-in user, newest first"
+    myProjects: [ProjectSummary!]!
   }
 
   type Mutation {
     createRun(input: CreateRunInput!): Run!
     "Save a new project (or a fork, with forkedFrom). Keep the editToken: it is needed to save changes."
     createProject(input: ProjectInput!, forkedFrom: String): SavedProject!
-    "Save changes to a project you created"
-    updateProject(slug: String!, editToken: String!, input: ProjectInput!): Project!
+    "Save changes to a project you own (signed in) or have the edit token for"
+    updateProject(slug: String!, editToken: String, input: ProjectInput!): Project!
+  }
+
+  type User {
+    id: ID!
+    login: String!
+    name: String!
+    avatarUrl: String!
+  }
+
+  type ProjectSummary {
+    slug: String!
+    title: String!
+    fileCount: Int!
+    updatedAt: String!
   }
 
   type Subscription {
@@ -78,6 +105,8 @@ const typeDefs = /* GraphQL */ `
     folders: [String!]!
     stdin: String!
     forkedFrom: String
+    "True when the signed-in user owns this project"
+    ownedByMe: Boolean!
     createdAt: String!
     updatedAt: String!
   }
@@ -164,31 +193,42 @@ export const schema = createSchema<Context>({
         }
       },
       project: (_, { slug }: { slug: string }) => getProject(slug),
+      me: (_, __, { user }) => user,
+      myProjects: async (_, __, { user }) => (user ? ((await listMyProjects(user.id)) ?? []) : []),
+    },
+
+    Project: {
+      ownedByMe: (project: Project, _: unknown, { user }: Context) =>
+        user !== null && project.ownerId === user.id,
     },
 
     Mutation: {
-      createProject: (_, { input, forkedFrom }: { input: ProjectInput; forkedFrom?: string }) =>
-        createProject({ ...input, ...(forkedFrom ? { forkedFrom } : {}) }),
+      createProject: (
+        _,
+        { input, forkedFrom }: { input: ProjectInput; forkedFrom?: string },
+        { user },
+      ) => createProject({ ...input, ...(forkedFrom ? { forkedFrom } : {}) }, user?.id),
 
       updateProject: (
         _,
-        { slug, editToken, input }: { slug: string; editToken: string; input: ProjectInput },
-      ) => updateProject(slug, editToken, input),
+        { slug, editToken, input }: { slug: string; editToken?: string; input: ProjectInput },
+        { user },
+      ) => updateProject(slug, input, editToken ?? undefined, user?.id),
 
       createRun: async (
         _,
         { input }: { input: { files: ProjectFile[]; entryFile: string; stdin?: string } },
-        { req },
+        { req, user },
       ) => {
         // Project rules (paths, limits, language) are checked by the execution service
-        if (await isRateLimited(req.socket.remoteAddress ?? 'unknown')) {
+        if (await isRateLimited(req.socket.remoteAddress ?? 'unknown', user?.id)) {
           throw new GraphQLError('Too many runs, please wait a minute', {
             extensions: { code: 'RATE_LIMITED' },
           });
         }
 
         try {
-          const runId = await createRun(input.files, input.entryFile, input.stdin ?? '');
+          const runId = await createRun(input.files, input.entryFile, input.stdin ?? '', user?.id);
           return toRun(await getRun(runId));
         } catch (error) {
           throw toGraphQLError(error);
