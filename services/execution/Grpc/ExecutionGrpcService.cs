@@ -77,13 +77,13 @@ public class ExecutionGrpcService(ExecutionDb db, RunQueue queue, IConnectionMul
         try
         {
             var run = await FindRunAsync(id, cancellationToken);
-            await stream.WriteAsync(ToMessage(run), cancellationToken);
+            await stream.WriteAsync(await WithLiveOutputAsync(run), cancellationToken);
 
             while (!run.IsFinished)
             {
                 await updates.ReadAsync(cancellationToken);
                 run = await FindRunAsync(id, cancellationToken);
-                await stream.WriteAsync(ToMessage(run), cancellationToken);
+                await stream.WriteAsync(await WithLiveOutputAsync(run), cancellationToken);
             }
         }
         finally
@@ -107,6 +107,22 @@ public class ExecutionGrpcService(ExecutionDb db, RunQueue queue, IConnectionMul
         var response = new ListRunsResponse();
         response.Runs.AddRange(runs.Select(ToMessage));
         return response;
+    }
+
+    // While a run is going, show the output it has printed so far as status "running"
+    private async Task<RunMessage> WithLiveOutputAsync(Run run)
+    {
+        var message = ToMessage(run);
+        if (run.IsFinished) return message;
+
+        var live = await LiveOutput.LoadAsync(redis.GetDatabase(), run.Id);
+        if (live is not null)
+        {
+            message.Status = "running";
+            message.Stdout = live.Stdout;
+            message.Stderr = live.Stderr;
+        }
+        return message;
     }
 
     private async Task<Run> FindRunAsync(Guid id, CancellationToken cancellationToken)

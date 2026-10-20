@@ -21,6 +21,7 @@ builder.Services.AddSingleton(_ =>
     new ConnectionFactory { Uri = new Uri(config["RabbitMq:Url"]!) }.CreateConnectionAsync().GetAwaiter().GetResult());
 builder.Services.AddSingleton<RunQueue>();
 builder.Services.AddHostedService<RunResultConsumer>();
+builder.Services.AddHostedService<LiveOutputConsumer>();
 builder.Services.AddGrpc();
 builder.Services.AddGrpcReflection();
 

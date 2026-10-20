@@ -51,7 +51,7 @@ message GetRunRequest {
 message Run {
   string id = 1;
   string language = 2;
-  string status = 3; // queued | completed | timed_out | memory_exceeded | failed
+  string status = 3; // queued | running (streamed only) | completed | timed_out | memory_exceeded | failed
   optional int32 exit_code = 4;
   string stdout = 5;
   string stderr = 6;

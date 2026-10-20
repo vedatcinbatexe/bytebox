@@ -1,7 +1,8 @@
 import type { Run, RunStatus } from '@/lib/runs';
 
 export const STATUS: Record<RunStatus, { label: string; className: string }> = {
-  QUEUED: { label: 'Running…', className: 'bg-info/15 text-info' },
+  QUEUED: { label: 'Starting…', className: 'bg-info/15 text-info' },
+  RUNNING: { label: 'Running…', className: 'animate-pulse bg-info/15 text-info' },
   COMPLETED: { label: 'Completed', className: 'bg-success/15 text-success' },
   TIMED_OUT: { label: 'Time limit exceeded', className: 'bg-warning/15 text-warning' },
   MEMORY_EXCEEDED: { label: 'Memory limit exceeded', className: 'bg-warning/15 text-warning' },
@@ -13,6 +14,11 @@ interface Props {
   error: string | null;
 }
 
+// Queued or running: the run hasn't finished yet
+export function isFinished(status: RunStatus): boolean {
+  return status !== 'QUEUED' && status !== 'RUNNING';
+}
+
 export function OutputPanel({ run, error }: Props) {
   return (
     <section className="flex min-h-0 flex-1 flex-col">
@@ -20,7 +26,7 @@ export function OutputPanel({ run, error }: Props) {
         <h2 className="text-xs font-semibold tracking-wide text-muted uppercase">Output</h2>
         {run && (
           <div className="flex items-center gap-3 text-xs text-muted">
-            {run.status !== 'QUEUED' && (
+            {isFinished(run.status) && (
               <>
                 {run.exitCode !== null && <span>exit {run.exitCode}</span>}
                 <span>{run.timeMs} ms</span>
@@ -45,7 +51,8 @@ export function OutputPanel({ run, error }: Props) {
           <>
             {run.stdout && <pre className="whitespace-pre-wrap text-fg">{run.stdout}</pre>}
             {run.stderr && <pre className="whitespace-pre-wrap text-danger">{run.stderr}</pre>}
-            {!run.stdout && !run.stderr && <p className="text-subtle">No output.</p>}
+            {!run.stdout && !run.stderr && isFinished(run.status) && <p className="text-subtle">No output.</p>}
+            {run.status === 'RUNNING' && <span className="inline-block animate-pulse text-accent">▋</span>}
             {run.truncated && (
               <p className="mt-3 text-xs text-warning">Output was cut off at 64 KB.</p>
             )}

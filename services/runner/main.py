@@ -10,6 +10,8 @@ from sandbox import ensure_images, failed, remove_leftover_containers, run_proje
 RABBITMQ_URL = os.environ.get("RABBITMQ_URL", "amqp://guest:guest@localhost:5672")
 REQUEST_QUEUE = "run.requested"
 RESULT_QUEUE = "run.completed"
+OUTPUT_QUEUE = "run.output"  # live output while a program runs
+LIVE_OUTPUT_EVERY_SECONDS = 0.25
 
 
 def connect():
@@ -31,26 +33,56 @@ def on_message(channel, method, properties, body):
         return
 
     print(f"Running {run_id}: {job.get('entryFile')} ({job.get('language')})", flush=True)
-    try:
-        result = run_project(
-            job.get("language"),
-            job.get("files", []),
-            job.get("entryFile", ""),
-            job.get("stdin", ""),
-        )
-    except Exception as error:  # Docker problems must not crash the runner
-        print(f"Run {run_id} failed: {error}", flush=True)
-        result = failed("Internal error while running code")
+
+    # The run happens in a worker thread; this (RabbitMQ) thread sends its live output meanwhile.
+    # pika channels may only be used from the thread that owns them, so all publishing stays here.
+    outcome = {}
+    output = {}
+
+    def work():
+        try:
+            outcome["result"] = run_project(
+                job.get("language"),
+                job.get("files", []),
+                job.get("entryFile", ""),
+                job.get("stdin", ""),
+                on_start=lambda collector: output.setdefault("collector", collector),
+            )
+        except Exception as error:  # Docker problems must not crash the runner
+            print(f"Run {run_id} failed: {error}", flush=True)
+            outcome["result"] = failed("Internal error while running code")
+
+    worker = threading.Thread(target=work, daemon=True)
+    worker.start()
+    sent = None
+    while worker.is_alive():
+        worker.join(timeout=LIVE_OUTPUT_EVERY_SECONDS)
+        collector = output.get("collector")
+        if collector is None or not worker.is_alive():
+            continue
+        snapshot = (collector.stdout, collector.stderr)
+        if snapshot != sent:
+            sent = snapshot
+            publish(channel, OUTPUT_QUEUE, {
+                "runId": run_id,
+                "stdout": snapshot[0].decode(errors="replace"),
+                "stderr": snapshot[1].decode(errors="replace"),
+            })
+    result = outcome["result"]
 
     result["runId"] = run_id
-    channel.basic_publish(
-        exchange="",
-        routing_key=RESULT_QUEUE,
-        body=json.dumps(result),
-        properties=pika.BasicProperties(content_type="application/json", delivery_mode=2),
-    )
+    publish(channel, RESULT_QUEUE, result)
     channel.basic_ack(delivery_tag=method.delivery_tag)
     print(f"Finished {run_id}: {result['status']} in {result['timeMs']} ms", flush=True)
+
+
+def publish(channel, queue, message):
+    channel.basic_publish(
+        exchange="",
+        routing_key=queue,
+        body=json.dumps(message),
+        properties=pika.BasicProperties(content_type="application/json", delivery_mode=2),
+    )
 
 
 def sweep_leftovers_forever():
@@ -72,6 +104,7 @@ def main():
     channel = connection.channel()
     channel.queue_declare(queue=REQUEST_QUEUE, durable=True)
     channel.queue_declare(queue=RESULT_QUEUE, durable=True)
+    channel.queue_declare(queue=OUTPUT_QUEUE, durable=True)
     channel.basic_qos(prefetch_count=1)  # one run at a time per runner
     channel.basic_consume(queue=REQUEST_QUEUE, on_message_callback=on_message)
     print(f"Runner is waiting for jobs on '{REQUEST_QUEUE}'", flush=True)

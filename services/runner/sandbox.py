@@ -57,8 +57,12 @@ def run_code(language, code, stdin=""):
     return run_project(language, [{"path": entry, "content": code}], entry, stdin)
 
 
-def run_project(language, files, entry_file, stdin=""):
-    """Run entry_file from a multi-file project in a fresh, locked-down container."""
+def run_project(language, files, entry_file, stdin="", on_start=None):
+    """Run entry_file from a multi-file project in a fresh, locked-down container.
+
+    on_start(output) is called once the program starts; output.stdout / output.stderr
+    grow while it runs, so the caller can show live output.
+    """
     config = LANGUAGES.get(language)
     if config is None:
         return failed(f"Unsupported language: {language}")
@@ -95,6 +99,8 @@ def run_project(language, files, entry_file, stdin=""):
 
     try:
         output = OutputCollector(container)
+        if on_start:
+            on_start(output)
         started = time.monotonic()
         container.start()
         send_archive(container, archive)
