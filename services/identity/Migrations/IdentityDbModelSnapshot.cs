@@ -35,8 +35,11 @@ namespace Identity.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<long>("GitHubId")
+                    b.Property<long?>("GitHubId")
                         .HasColumnType("bigint");
+
+                    b.Property<string>("GoogleId")
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("LastLoginAt")
                         .HasColumnType("timestamp with time zone");
@@ -51,6 +54,9 @@ namespace Identity.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("GitHubId")
+                        .IsUnique();
+
+                    b.HasIndex("GoogleId")
                         .IsUnique();
 
                     b.ToTable("users", (string)null);

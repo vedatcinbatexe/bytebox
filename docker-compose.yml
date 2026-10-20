@@ -63,9 +63,11 @@ services:
     build: ./services/identity
     environment:
       ConnectionStrings__Postgres: Host=postgres;Database=identity;Username=${POSTGRES_USER:-bytebox};Password=${POSTGRES_PASSWORD:-bytebox}
-      # GitHub OAuth App and session secret come from .env (see .env.example)
+      # GitHub / Google OAuth clients and the session secret come from .env (see .env.example)
       GitHub__ClientId: ${GITHUB_CLIENT_ID:-}
       GitHub__ClientSecret: ${GITHUB_CLIENT_SECRET:-}
+      Google__ClientId: ${GOOGLE_CLIENT_ID:-}
+      Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:-}
       Jwt__Secret: ${JWT_SECRET:-dev-only-secret-please-set-JWT_SECRET-in-env}
       PublicUrl: http://localhost:5001
       WebUrl: http://localhost:3000

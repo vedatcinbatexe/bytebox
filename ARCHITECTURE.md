@@ -29,7 +29,7 @@
 |---|---|---|---|---|---|
 | `portals/web` | Web portal (UI) | Next.js, TypeScript, Tailwind CSS | Web pages | – | 3000 |
 | `services/gateway` | API gateway / BFF | Node.js, TypeScript, GraphQL Yoga | **GraphQL** | Redis (rate limits) | 4000 |
-| `services/identity` | Users & GitHub login | .NET (ASP.NET Core) | **REST** (redirects + session cookie) | PostgreSQL `identity` | 5001 |
+| `services/identity` | Users & login (GitHub, Google) | .NET (ASP.NET Core) | **REST** (redirects + session cookie) | PostgreSQL `identity` | 5001 |
 | `services/execution` | Run lifecycle | .NET (ASP.NET Core) | **gRPC** (+ REST health) | PostgreSQL `execution`, Redis | 5002 |
 | `services/project` | Projects (files & folders) & sharing | Python, FastAPI | **REST** | MongoDB | 5003 |
 | `services/runner` | Sandbox worker (one-off runs) | Python | **RabbitMQ** consumer | – | – |
@@ -469,7 +469,8 @@ flowchart LR
 
 ### Step 8 — Identity Service & Auth
 - [x] **GitHub login** (OAuth App, see `.env.example`): `/auth/github/login` → GitHub → `/auth/github/callback`, with a random `state` cookie against forged logins
-- [x] `users` table in PostgreSQL (EF Core migrations); the first login creates the account
+- [x] **Google login** (OAuth client, see `.env.example`): same flow at `/auth/google/login` → Google → `/auth/google/callback` (OpenID Connect `userinfo`); GitHub and Google share one `IOAuthProvider` flow
+- [x] `users` table in PostgreSQL (EF Core migrations); the first login creates the account; a GitHub and a Google account are separate Bytebox accounts (no linking by email)
 - [x] **Session:** signed JWT (7 days) in an httpOnly cookie `bytebox_session`; the gateway and terminal service verify it with the shared `JWT_SECRET`
 - [x] `/auth/logout`; redirects only to pages of the web portal (no open redirects)
 - [x] Dev-only login `/auth/dev/login?login=<name>` behind `DEV_LOGIN_ENABLED` (off by default)
@@ -519,7 +520,7 @@ flowchart LR
 | Data | PostgreSQL (users, runs), MongoDB (projects), Redis (pub-sub, rate limits, sessions) | Right store per data shape; each service owns its data |
 | Isolation | Docker per run → gVisor later | Simple start, clear upgrade path |
 | UI themes | CSS variables + Tailwind tokens, `data-theme` on `<html>` | One place per theme; no hard-coded colors in components; editor and terminal follow automatically |
-| Auth | GitHub OAuth + JWT in an httpOnly cookie, verified by gateway and terminal | No passwords to store; one cookie works for GraphQL and WebSocket on the same site |
+| Auth | GitHub / Google OAuth + JWT in an httpOnly cookie, verified by gateway and terminal | No passwords to store; one cookie works for GraphQL and WebSocket on the same site |
 | Who can run code | Signed-in users only (checked in the backend) | Running code costs resources and needs abuse limits per account |
 | Multi-file runs | Whole project sent with each run, entry = open file | Runs stay stateless and one-off; same runner design as single files |
 | Terminal | Separate long-lived session containers + WebSocket service | Interactive shells need state and a live connection; keep them apart from one-off runs |

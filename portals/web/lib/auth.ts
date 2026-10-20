@@ -13,8 +13,10 @@ export interface User {
   avatarUrl: string;
 }
 
-export function githubLoginUrl(returnTo: string): string {
-  return `${IDENTITY_URL}/auth/github/login?returnTo=${encodeURIComponent(returnTo)}`;
+export type LoginProvider = 'github' | 'google';
+
+export function providerLoginUrl(provider: LoginProvider, returnTo: string): string {
+  return `${IDENTITY_URL}/auth/${provider}/login?returnTo=${encodeURIComponent(returnTo)}`;
 }
 
 export function logoutUrl(returnTo: string): string {

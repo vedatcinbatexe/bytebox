@@ -20,7 +20,8 @@ function Avatar({ user, size }: { user: User; size: number }) {
       </span>
     );
   }
-  return <img src={user.avatarUrl} alt="" style={style} className="rounded-full" />;
+  // no-referrer: Google profile pictures may refuse requests coming from other sites
+  return <img src={user.avatarUrl} alt="" style={style} className="rounded-full" referrerPolicy="no-referrer" />;
 }
 
 // Profile section in the header: who is signed in, with My projects and Sign out

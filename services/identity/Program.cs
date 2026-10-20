@@ -9,6 +9,7 @@ var config = builder.Configuration;
 
 builder.Services.AddDbContext<IdentityDb>(options => options.UseNpgsql(config.GetConnectionString("Postgres")));
 builder.Services.AddHttpClient<GitHubClient>();
+builder.Services.AddHttpClient<GoogleClient>();
 builder.Services.AddSingleton<SessionTokens>();
 
 var app = builder.Build();
@@ -26,21 +27,26 @@ const string ReturnCookie = "bytebox_return_to";
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "identity" }));
 
-// 1. Send the user to GitHub. A random "state" protects against forged login requests.
-app.MapGet("/auth/github/login", (HttpContext http, GitHubClient github, string? returnTo) =>
+// 1. Send the user to GitHub or Google. A random "state" protects against forged login requests.
+app.MapGet("/auth/{provider}/login", (HttpContext http, string provider, string? returnTo) =>
 {
-    if (!github.IsConfigured) return Results.Redirect($"{webUrl}/login?error=not-configured");
+    var oauth = FindProvider(http, provider);
+    if (oauth is null) return Results.NotFound();
+    if (!oauth.IsConfigured) return Results.Redirect($"{webUrl}/login?error=not-configured&provider={provider}");
 
     var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     SetTemporaryCookie(http, StateCookie, state);
     SetTemporaryCookie(http, ReturnCookie, SafePath(returnTo));
-    return Results.Redirect(github.AuthorizeUrl(state));
+    return Results.Redirect(oauth.AuthorizeUrl(state));
 });
 
-// 2. GitHub sends the user back here with a one-time code
-app.MapGet("/auth/github/callback", async (
-    HttpContext http, GitHubClient github, IdentityDb db, SessionTokens tokens, string? code, string? state) =>
+// 2. The provider sends the user back here with a one-time code
+app.MapGet("/auth/{provider}/callback", async (
+    HttpContext http, IdentityDb db, SessionTokens tokens, string provider, string? code, string? state) =>
 {
+    var oauth = FindProvider(http, provider);
+    if (oauth is null) return Results.NotFound();
+
     var expectedState = http.Request.Cookies[StateCookie];
     var returnTo = SafePath(http.Request.Cookies[ReturnCookie]);
     http.Response.Cookies.Delete(StateCookie);
@@ -52,7 +58,7 @@ app.MapGet("/auth/github/callback", async (
         return Results.Redirect($"{webUrl}/login?error=failed");
     }
 
-    var profile = await github.GetProfileAsync(code);
+    var profile = await oauth.GetProfileAsync(code);
     if (profile is null) return Results.Redirect($"{webUrl}/login?error=failed");
 
     var user = await SaveUserAsync(db, profile);
@@ -74,7 +80,7 @@ if (config.GetValue("DevLogin:Enabled", false))
     {
         // Negative ids can't clash with real GitHub users
         var id = -Math.Abs(BitConverter.ToInt64(SHA256.HashData(Encoding.UTF8.GetBytes(login)), 0));
-        var user = await SaveUserAsync(db, new GitHubProfile(id, login, login, ""));
+        var user = await SaveUserAsync(db, new ExternalProfile("github", id.ToString(), login, login, ""));
         SetSessionCookie(http, tokens.Issue(user));
         return Results.Redirect(webUrl + SafePath(returnTo));
     });
@@ -82,14 +88,28 @@ if (config.GetValue("DevLogin:Enabled", false))
 
 app.Run();
 
-async Task<User> SaveUserAsync(IdentityDb db, GitHubProfile profile)
+IOAuthProvider? FindProvider(HttpContext http, string name) => name switch
+{
+    "github" => http.RequestServices.GetRequiredService<GitHubClient>(),
+    "google" => http.RequestServices.GetRequiredService<GoogleClient>(),
+    _ => null,
+};
+
+// Find the user for this GitHub or Google account, or create one
+async Task<User> SaveUserAsync(IdentityDb db, ExternalProfile profile)
 {
     var now = DateTime.UtcNow;
-    var user = await db.Users.FirstOrDefaultAsync(u => u.GitHubId == profile.Id);
-    if (user is null)
+    User? user;
+    if (profile.Provider == "github")
     {
-        user = new User { Id = Guid.NewGuid(), GitHubId = profile.Id, CreatedAt = now };
-        db.Users.Add(user);
+        var gitHubId = long.Parse(profile.ProviderUserId);
+        user = await db.Users.FirstOrDefaultAsync(u => u.GitHubId == gitHubId);
+        user ??= db.Users.Add(new User { Id = Guid.NewGuid(), GitHubId = gitHubId, CreatedAt = now }).Entity;
+    }
+    else
+    {
+        user = await db.Users.FirstOrDefaultAsync(u => u.GoogleId == profile.ProviderUserId);
+        user ??= db.Users.Add(new User { Id = Guid.NewGuid(), GoogleId = profile.ProviderUserId, CreatedAt = now }).Entity;
     }
     user.Login = profile.Login;
     user.Name = profile.Name;
