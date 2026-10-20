@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { DRAG_TYPE, FileTree } from './FileTree';
 import { OutputPanel, isFinished } from './OutputPanel';
+import { MarkdownPanel } from './MarkdownPanel';
 import { PreviewPanel } from './PreviewPanel';
 import { TestsPanel } from './TestsPanel';
 import { TESTS_FILE, parseTests, serializeTests } from '@/lib/tests';
@@ -382,7 +383,9 @@ export function Playground({ slug }: Props) {
       .sort()
       .map((path) => ({ id: `file:${path}`, label: path, group: 'File' as const, run: () => openFile(path) }));
 
-    if (isHtmlOpen) commands.push(action('preview', `Preview ${activePath}`, () => setAsideTab('preview')));
+    if (isHtmlOpen || isMarkdownOpen) {
+      commands.push(action('preview', `Preview ${activePath}`, () => setAsideTab('preview')));
+    }
     else if (canRun) commands.push(action('run', `Run ${activePath}`, () => void runActiveFile(), '⌘↵'));
     if (activePath && canFormat(activePath)) {
       commands.push(action('format', `Format ${activePath}`, () => void formatActiveFile(), '⇧⌥F'));
@@ -671,7 +674,10 @@ export function Playground({ slug }: Props) {
   const pages = htmlFiles(project.files);
   const isHtmlOpen = activePath?.toLowerCase().endsWith('.html') ?? false;
   const previewPath = isHtmlOpen ? activePath! : pages[0];
-  const showPreview = asideTab === 'preview' && previewPath !== undefined;
+  // Markdown files get a rendered preview too
+  const isMarkdownOpen = activePath?.toLowerCase().endsWith('.md') ?? false;
+  const hasPreview = isMarkdownOpen || previewPath !== undefined;
+  const showPreview = asideTab === 'preview' && hasPreview;
 
   if (notFound) {
     return (
@@ -830,10 +836,10 @@ export function Playground({ slug }: Props) {
           >
             ? Commands
           </button>
-          {isHtmlOpen ? (
+          {isHtmlOpen || isMarkdownOpen ? (
             <button
               onClick={() => setAsideTab('preview')}
-              title="Show the live preview of this page"
+              title={isHtmlOpen ? 'Show the live preview of this page' : 'Show this file rendered'}
               className="max-w-[50vw] truncate rounded bg-accent px-3.5 py-1.5 text-sm font-semibold text-accent-fg hover:bg-accent-hover"
             >
               👁 Preview {activePath}
@@ -1053,7 +1059,7 @@ export function Playground({ slug }: Props) {
           style={{ '--aside-w': `${sizes.aside}px` } as React.CSSProperties}
         >
           <div role="tablist" className="flex shrink-0 border-b border-line text-sm">
-            {(pages.length > 0 ? (['output', 'tests', 'preview'] as const) : (['output', 'tests'] as const)).map((tab) => (
+            {(hasPreview ? (['output', 'tests', 'preview'] as const) : (['output', 'tests'] as const)).map((tab) => (
               <button
                 key={tab}
                 role="tab"
@@ -1081,6 +1087,8 @@ export function Playground({ slug }: Props) {
               canChange={canChange}
               readOnly={!user}
             />
+          ) : showPreview && isMarkdownOpen ? (
+            <MarkdownPanel path={activePath!} markdown={project.files[activePath!] ?? ''} />
           ) : showPreview ? (
             <PreviewPanel files={project.files} htmlPath={previewPath!} />
           ) : (
