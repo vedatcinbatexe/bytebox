@@ -16,6 +16,7 @@ import {
   createProject,
   deleteProject,
   explore,
+  publicProjectsOf,
   getVersion,
   listVersions,
   setVisibility,
@@ -29,6 +30,7 @@ import {
   type Visibility,
 } from './projects.js';
 import type { SessionUser } from './auth.js';
+import { getPublicUser } from './identity.js';
 
 const languages = [
   { id: 'python', name: 'Python', extension: '.py' },
@@ -68,6 +70,8 @@ const typeDefs = /* GraphQL */ `
     project(slug: String!): Project
     "Newest public projects"
     explore: [ProjectSummary!]!
+    "Someone's public profile and public projects, or null if there's no such user"
+    userProfile(login: String!): UserProfile
     "The signed-in user, or null"
     me: User
     "Projects owned by the signed-in user, newest first"
@@ -101,6 +105,14 @@ const typeDefs = /* GraphQL */ `
     login: String!
     name: String!
     avatarUrl: String!
+  }
+
+  type UserProfile {
+    login: String!
+    name: String!
+    avatarUrl: String!
+    joinedAt: String!
+    projects: [ProjectSummary!]!
   }
 
   type ProjectVersion {
@@ -268,6 +280,11 @@ export const schema = createSchema<Context>({
       },
       project: (_, { slug }: { slug: string }, { user }) => getProject(slug, user?.id),
       explore: () => explore(),
+      userProfile: async (_, { login }: { login: string }) => {
+        const [user, projects] = await Promise.all([getPublicUser(login), publicProjectsOf(login)]);
+        if (!user) return null;
+        return { login: user.login, name: user.name, avatarUrl: user.avatarUrl, joinedAt: user.createdAt, projects };
+      },
       me: (_, __, { user }) => user,
       myProjects: async (_, __, { user }) => (user ? ((await listMyProjects(user.id)) ?? []) : []),
       projectVersions: (_, { slug }: { slug: string }, { user }) => listVersions(slug, requireUser(user).id),

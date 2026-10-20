@@ -82,6 +82,10 @@ export function getProject(slug: string, userId?: string): Promise<Project | nul
   return call<Project>('GET', `/projects/${encodeURIComponent(slug)}`, { userId });
 }
 
+export async function publicProjectsOf(login: string): Promise<ProjectSummary[]> {
+  return (await call<ProjectSummary[]>('GET', `/users/${encodeURIComponent(login)}/projects`)) ?? [];
+}
+
 export async function explore(): Promise<ProjectSummary[]> {
   return (await call<ProjectSummary[]>('GET', '/explore?limit=60')) ?? [];
 }

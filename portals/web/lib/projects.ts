@@ -153,6 +153,22 @@ export async function fetchMyProjects(): Promise<ProjectSummary[]> {
   return data.myProjects;
 }
 
+export interface UserProfile {
+  login: string;
+  name: string;
+  avatarUrl: string;
+  joinedAt: string;
+  projects: ProjectSummary[];
+}
+
+export async function fetchProfile(login: string): Promise<UserProfile | null> {
+  const data = await request<{ userProfile: UserProfile | null }>(
+    `query Profile($login: String!) { userProfile(login: $login) { login name avatarUrl joinedAt projects { ${SUMMARY_FIELDS} } } }`,
+    { login },
+  );
+  return data.userProfile;
+}
+
 export async function fetchExplore(): Promise<ProjectSummary[]> {
   const data = await request<{ explore: ProjectSummary[] }>(`{ explore { ${SUMMARY_FIELDS} } }`);
   return data.explore;

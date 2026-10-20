@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { UserMenu } from '@/components/UserMenu';
 import { ThemePicker } from '@/components/ThemePicker';
 import { useMe } from '@/lib/auth';
@@ -19,6 +20,7 @@ function timeAgo(iso: string): string {
 // Public projects from everyone, newest first
 export default function ExplorePage() {
   const { user, loading } = useMe();
+  const router = useRouter();
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +80,21 @@ export default function ExplorePage() {
                 className="flex h-full flex-col rounded-lg border border-line bg-panel p-4 transition-colors hover:border-accent"
               >
                 <span className="mb-1 truncate font-semibold">{project.title}</span>
-                <span className="mb-3 text-xs text-muted">by @{project.ownerLogin ?? 'someone'}</span>
+                {project.ownerLogin ? (
+                  <span
+                    role="link"
+                    tabIndex={0}
+                    onClick={(event) => {
+                      event.preventDefault(); // the card itself opens the project
+                      router.push(`/u/${encodeURIComponent(project.ownerLogin!)}`);
+                    }}
+                    className="mb-3 w-fit text-xs text-muted hover:text-accent hover:underline"
+                  >
+                    by @{project.ownerLogin}
+                  </span>
+                ) : (
+                  <span className="mb-3 text-xs text-muted">by someone</span>
+                )}
                 <span className="mt-auto flex justify-between text-xs text-subtle">
                   <span>
                     {project.fileCount} {project.fileCount === 1 ? 'file' : 'files'}

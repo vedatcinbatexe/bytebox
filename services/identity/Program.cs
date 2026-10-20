@@ -66,6 +66,18 @@ app.MapGet("/auth/{provider}/callback", async (
     return Results.Redirect(webUrl + returnTo);
 });
 
+// Public profile info (nothing private: no emails or provider ids)
+app.MapGet("/users/{login}", async (IdentityDb db, string login) =>
+{
+    var user = await db.Users.AsNoTracking()
+        .Where(u => u.Login.ToLower() == login.ToLower())
+        .OrderBy(u => u.CreatedAt)
+        .FirstOrDefaultAsync();
+    return user is null
+        ? Results.NotFound()
+        : Results.Ok(new { user.Login, Name = user.Name ?? user.Login, user.AvatarUrl, user.CreatedAt });
+});
+
 app.MapGet("/auth/logout", (HttpContext http, string? returnTo) =>
 {
     http.Response.Cookies.Delete(SessionTokens.CookieName);

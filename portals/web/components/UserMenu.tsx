@@ -10,12 +10,12 @@ interface Props {
   loading: boolean;
 }
 
-function Avatar({ user, size }: { user: User; size: number }) {
-  const style = { width: size, height: size };
+export function Avatar({ user, size }: { user: Pick<User, 'login' | 'avatarUrl'>; size: number }) {
+  const style = { width: size, height: size, fontSize: Math.round(size * 0.42) };
   // Dev-login users have no GitHub picture
   if (!user.avatarUrl) {
     return (
-      <span style={style} className="flex items-center justify-center rounded-full bg-accent text-xs font-bold">
+      <span style={style} className="flex items-center justify-center rounded-full bg-accent font-bold text-accent-fg">
         {user.login.slice(0, 1).toUpperCase()}
       </span>
     );
@@ -77,6 +77,9 @@ export function UserMenu({ user, loading }: Props) {
               <p className="truncate text-xs text-muted">@{user.login} · signed in</p>
             </div>
           </div>
+          <Link href={`/u/${encodeURIComponent(user.login)}`} role="menuitem" className="block px-3 py-2 hover:bg-raised">
+            👤 My profile
+          </Link>
           <button
             role="menuitem"
             onClick={() => {
