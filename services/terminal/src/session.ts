@@ -3,6 +3,7 @@ import { StringDecoder } from 'node:string_decoder';
 import Docker from 'dockerode';
 import type { WebSocket } from 'ws';
 import { checkFiles, isSafePath, packFiles, unpackFiles } from './files.js';
+import { SlidingWindowLimiter } from './limits.js';
 import type { ClientMessage, ProjectFile, ServerMessage } from './protocol.js';
 
 export const docker = new Docker();
@@ -18,8 +19,16 @@ export const LABEL = 'bytebox-terminal';
 
 // One terminal session per user. A new one replaces the old one.
 const sessions = new Map<string, Session>();
+// Starting a session creates a container, so limit how often each user can do it
+const newSessions = new SlidingWindowLimiter(Number(process.env.SESSIONS_PER_HOUR ?? 20), 60 * 60_000);
 
 export function openSession(ws: WebSocket, userId: string) {
+  if (!newSessions.tryTake(userId)) {
+    const reason = 'Too many terminal sessions in the last hour. Please try again later.';
+    ws.send(JSON.stringify({ type: 'exit', reason } satisfies ServerMessage));
+    ws.close();
+    return;
+  }
   console.log(`Session opened for user ${userId}`);
   sessions.get(userId)?.end('The terminal was opened in another tab');
   const session = new Session(ws, () => {

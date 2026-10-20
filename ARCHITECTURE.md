@@ -487,11 +487,13 @@ flowchart LR
 > Projects made before login was required have no owner: anyone can view and fork them, nobody can save them.
 
 ### Step 9 — Abuse Protection & Hardening
-- [ ] Rate limits for saves and terminal sessions (runs are already limited per user)
-- [ ] Max concurrent runs per user, reject when queue is too deep
-- [ ] Orphan container reaper in runner
-- [ ] Custom seccomp profile, gVisor runtime for runs and terminal sessions
-- [ ] More languages (Go, Java, Rust, TypeScript)
+- [x] Runs: 60 per minute per user (gateway, Redis) and at most **2 runs in progress per user** (execution, counted in PostgreSQL over the last 2 minutes) → `TOO_MANY_RUNS`
+- [x] Queue protection: more than 50 queued runs → `BUSY` ("Bytebox is busy right now")
+- [x] Saves (create/update project): 30 per minute per user → `RATE_LIMITED`
+- [x] Terminal: at most 20 new sessions per hour per user (`SESSIONS_PER_HOUR`)
+- [x] Runner removes leftover sandbox containers on start and every 30 s (older than 1 minute)
+- [x] Sandbox containers use Docker's default seccomp profile (blocks ~44 risky system calls)
+- [ ] Custom (tighter) seccomp profile, gVisor runtime — with deployment (Step 10)
 
 ### Step 10 — Observability, CI/CD & Deployment
 - [ ] Structured logs in every service, health/readiness checks

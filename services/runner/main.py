@@ -1,10 +1,11 @@
 import json
 import os
+import threading
 import time
 
 import pika
 
-from sandbox import ensure_images, failed, run_project
+from sandbox import ensure_images, failed, remove_leftover_containers, run_project
 
 RABBITMQ_URL = os.environ.get("RABBITMQ_URL", "amqp://guest:guest@localhost:5672")
 REQUEST_QUEUE = "run.requested"
@@ -52,8 +53,21 @@ def on_message(channel, method, properties, body):
     print(f"Finished {run_id}: {result['status']} in {result['timeMs']} ms", flush=True)
 
 
+def sweep_leftovers_forever():
+    # Runs time out after at most 10 seconds, so anything older than a minute is a leftover
+    while True:
+        time.sleep(30)
+        try:
+            if removed := remove_leftover_containers(max_age_seconds=60):
+                print(f"Removed {removed} leftover sandbox container(s)", flush=True)
+        except Exception as error:
+            print(f"Leftover sweep failed: {error}", flush=True)
+
+
 def main():
     ensure_images()
+    print(f"Removed {remove_leftover_containers(max_age_seconds=0)} leftover container(s) from before", flush=True)
+    threading.Thread(target=sweep_leftovers_forever, daemon=True).start()
     connection = connect()
     channel = connection.channel()
     channel.queue_declare(queue=REQUEST_QUEUE, durable=True)

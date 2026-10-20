@@ -35,6 +35,19 @@ def ensure_images():
             client.images.pull(image)
 
 
+def remove_leftover_containers(max_age_seconds=60):
+    """Remove sandbox containers left behind (e.g. if the runner crashed mid-run). Returns how many."""
+    removed = 0
+    now = time.time()
+    for container in client.containers.list(all=True, filters={"label": "bytebox=sandbox"}):
+        # "Created" looks like 2026-10-21T01:08:00.123456789Z; seconds precision is enough
+        created = time.mktime(time.strptime(container.attrs["Created"][:19], "%Y-%m-%dT%H:%M:%S")) - time.timezone
+        if now - created >= max_age_seconds:
+            container.remove(force=True)
+            removed += 1
+    return removed
+
+
 def run_code(language, code, stdin=""):
     """Run a single piece of code (a project with one file)."""
     config = LANGUAGES.get(language)
