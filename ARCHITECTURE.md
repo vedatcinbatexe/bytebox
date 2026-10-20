@@ -101,11 +101,12 @@ flowchart TB
 
 | From → To | Style | Why |
 |---|---|---|
-| web → gateway | **GraphQL** (HTTP + WebSocket subscriptions) | One flexible API for the UI, live run output via subscriptions |
+| web → gateway | **GraphQL** (HTTP, subscriptions over Server-Sent Events) | One flexible API for the UI, live run updates via subscriptions |
 | gateway → identity, snippet | **REST** | Simple CRUD resources |
 | gateway → execution | **gRPC** | Typed contract, fast internal calls, streaming output |
 | execution ↔ runner | **RabbitMQ events** | Decouples API from slow, risky execution; absorbs bursts; scale runners independently |
-| execution → gateway (live output) | **Redis pub/sub** | Lightweight fan-out of output chunks to subscribed clients |
+| execution → gateway (live updates) | **gRPC server streaming** (`StreamRun`) | Gateway turns the stream into a GraphQL subscription |
+| inside execution | **Redis pub/sub** (`run:{id}`) | Wakes up open `StreamRun` calls when a result is saved |
 
 ---
 
@@ -142,8 +143,9 @@ sequenceDiagram
     Q->>E: Deliver run.completed
     E->>E: Update Run in PostgreSQL
     E->>RD: Publish run:{runId}
-    RD-->>G: Result event
-    G-->>W: Subscription update
+    RD-->>E: Wake up open StreamRun calls
+    E-->>G: StreamRun update (gRPC stream)
+    G-->>W: Subscription update (SSE)
     W-->>U: Show output
 ```
 
@@ -371,11 +373,27 @@ docker run --rm --network bytebox_default fullstorydev/grpcurl -plaintext \
 ```
 
 ### Step 3 — Gateway (GraphQL)
-- [ ] Schema: `languages`, `run` mutation, `run(id)` query
-- [ ] gRPC client to execution
-- [ ] `runUpdates(runId)` subscription fed by Redis pub/sub
-- [ ] Input validation + max code size
-- [ ] Rate limiting with Redis
+- [x] Schema: `languages`, `run(id)` query, `createRun` mutation, `RunStatus` enum
+- [x] gRPC client to execution (proto loaded at runtime from `proto/`)
+- [x] `runUpdates(id)` subscription fed by execution's `StreamRun` (Server-Sent Events)
+- [x] Input validation: supported language, max code size (64 KB)
+- [x] Rate limiting with Redis: 20 runs per minute per IP (`RATE_LIMIT_RUNS_PER_MINUTE`)
+- [x] Error codes for the UI: `BAD_USER_INPUT`, `NOT_FOUND`, `RATE_LIMITED`, `SERVICE_UNAVAILABLE`
+
+**Try it:** open http://localhost:4000/graphql (GraphiQL) and run:
+
+```graphql
+mutation {
+  createRun(input: { language: "python", code: "print(input().upper())", stdin: "hi" }) {
+    id
+    status
+  }
+}
+
+subscription {
+  runUpdates(id: "<RUN_ID>") { status stdout stderr exitCode timeMs }
+}
+```
 
 ### Step 4 — Web Portal: Editor & Run
 - [ ] GraphQL client (urql or Apollo)
