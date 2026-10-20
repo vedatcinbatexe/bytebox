@@ -3,16 +3,18 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createProject } from '@/lib/projects';
-import { NEW_WORKSPACE_CODE, NEW_WORKSPACE_FILE } from '@/lib/templates';
+import { WORKSPACE_TEMPLATES } from '@/lib/templates';
 
 interface Props {
   onClose: () => void;
 }
 
-// Asks for a name, then creates a workspace with one file (init.js) and opens it
+// Asks for a name and a template, then creates the workspace and opens it
 export function CreateWorkspaceModal({ onClose }: Props) {
   const router = useRouter();
+  const [template, setTemplate] = useState(WORKSPACE_TEMPLATES[0]);
   const [name, setName] = useState('');
+  const [nameEdited, setNameEdited] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,8 +39,8 @@ export function CreateWorkspaceModal({ onClose }: Props) {
     try {
       const created = await createProject({
         title,
-        project: { files: { [NEW_WORKSPACE_FILE]: NEW_WORKSPACE_CODE }, folders: [] },
-        stdin: '',
+        project: { files: template.files, folders: [] },
+        stdin: template.stdin ?? '',
       });
       router.push(`/p/${created.slug}`);
     } catch (createError) {
@@ -59,15 +61,44 @@ export function CreateWorkspaceModal({ onClose }: Props) {
         aria-labelledby="create-workspace-title"
         onSubmit={create}
         onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-md rounded-lg border border-line bg-panel p-6 shadow-xl"
+        className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-lg border border-line bg-panel p-6 shadow-xl"
       >
         <h2 id="create-workspace-title" className="mb-1 text-lg font-semibold">
           Create workspace
         </h2>
-        <p className="mb-4 text-sm text-muted">
-          It starts with one file, <code className="text-success">{NEW_WORKSPACE_FILE}</code>, that prints
-          &quot;hello world&quot;.
-        </p>
+        <p className="mb-4 text-sm text-muted">Pick a starting point and give it a name.</p>
+
+        <div role="radiogroup" aria-label="Template" className="mb-5 grid gap-2 sm:grid-cols-2">
+          {WORKSPACE_TEMPLATES.map((item) => {
+            const selected = item.id === template.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => {
+                  setTemplate(item);
+                  if (!nameEdited) setName(item.id === 'blank-js' ? '' : item.name);
+                }}
+                className={`flex gap-3 rounded-lg border p-3 text-left ${
+                  selected ? 'border-accent bg-accent/10' : 'border-line hover:bg-raised'
+                }`}
+              >
+                <span className="text-2xl" aria-hidden="true">
+                  {item.icon}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">{item.name}</span>
+                  <span className="block text-xs text-muted">{item.description}</span>
+                  <span className="mt-1 block truncate font-mono text-[11px] text-subtle">
+                    {Object.keys(item.files).join(' · ')}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
         <label htmlFor="workspace-name" className="mb-1 block text-xs font-semibold tracking-wide text-muted uppercase">
           Name
@@ -75,7 +106,10 @@ export function CreateWorkspaceModal({ onClose }: Props) {
         <input
           id="workspace-name"
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          onChange={(event) => {
+            setName(event.target.value);
+            setNameEdited(true);
+          }}
           maxLength={100}
           autoFocus
           placeholder="e.g. My first app"
