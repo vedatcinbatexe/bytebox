@@ -24,25 +24,25 @@ export function LoginRequiredModal({ onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="login-required-title"
-        className="w-full max-w-sm rounded-lg border border-zinc-800 bg-zinc-950 p-6 text-center shadow-xl"
+        className="w-full max-w-sm rounded-lg border border-line bg-panel p-6 text-center shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-3 text-3xl">🔒</div>
         <h2 id="login-required-title" className="mb-2 text-lg font-semibold">
           Login or sign up before making changes
         </h2>
-        <p className="mb-5 text-sm text-zinc-400">
+        <p className="mb-5 text-sm text-muted">
           You can look around freely. To run code, edit files, use the terminal or save projects, sign in
           with your GitHub account. It&apos;s free, and your first sign-in creates your account.
         </p>
         <div className="flex flex-col gap-2">
           <Link
             href={loginPageUrl()}
-            className="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+            className="rounded bg-accent px-4 py-2 text-sm font-semibold text-accent-fg hover:bg-accent-hover"
           >
             Log in or sign up
           </Link>
-          <button onClick={onClose} className="rounded px-4 py-2 text-sm text-zinc-400 hover:bg-zinc-900">
+          <button onClick={onClose} className="rounded px-4 py-2 text-sm text-muted hover:bg-raised">
             Keep browsing
           </button>
         </div>

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { THEME_SCRIPT } from '@/lib/themeScript';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -8,8 +9,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="bg-zinc-950 text-zinc-100 antialiased">{children}</body>
+    // data-theme is set by THEME_SCRIPT before React loads, so React must not complain about it
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
+      <body className="bg-app text-fg antialiased">{children}</body>
     </html>
   );
 }
