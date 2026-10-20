@@ -269,7 +269,8 @@ docker compose down              # stop everything
 | http://localhost:3000 | Web portal |
 | http://localhost:4000/graphql | GraphQL API (GraphiQL in browser) |
 | http://localhost:5001/health | identity |
-| http://localhost:5002/health | execution |
+| http://localhost:5002/health | execution (REST) |
+| localhost:50051 | execution (gRPC) |
 | http://localhost:5003/docs | snippet (Swagger UI) |
 | http://localhost:15673 | RabbitMQ management UI |
 
@@ -348,11 +349,26 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 ```
 
 ### Step 2 — Execution Service
-- [ ] `proto/execution.proto` (`CreateRun`, `GetRun`, `StreamRun`)
-- [ ] gRPC server in .NET
-- [ ] `runs` table in PostgreSQL (EF Core migrations)
-- [ ] Publish `run.requested`, consume `run.completed`
-- [ ] Cache run status in Redis, publish updates on `run:{runId}`
+- [x] `proto/execution.proto` (`CreateRun`, `GetRun`, `StreamRun`)
+- [x] gRPC server in .NET on port 8081 (HTTP/2), `/health` on 8080, gRPC reflection enabled
+- [x] `runs` table in PostgreSQL (EF Core, created on startup; switch to migrations when the schema changes)
+- [x] Validate language and code size, publish `run.requested`
+- [x] Consume `run.completed`, save the result, publish the update on Redis channel `run:{runId}`
+- [x] `StreamRun` sends the current state, then updates until the run is finished
+
+**Try it** (uses the `grpcurl` Docker image, nothing to install):
+
+```bash
+# Create a run
+docker run --rm --network bytebox_default fullstorydev/grpcurl -plaintext \
+  -d '{"language":"python","code":"print(input()[::-1])","stdin":"bytebox"}' \
+  execution:8081 bytebox.execution.v1.ExecutionService/CreateRun
+
+# Get the result (use the run_id from above)
+docker run --rm --network bytebox_default fullstorydev/grpcurl -plaintext \
+  -d '{"run_id":"<RUN_ID>"}' \
+  execution:8081 bytebox.execution.v1.ExecutionService/GetRun
+```
 
 ### Step 3 — Gateway (GraphQL)
 - [ ] Schema: `languages`, `run` mutation, `run(id)` query
