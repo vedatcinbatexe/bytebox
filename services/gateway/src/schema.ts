@@ -20,6 +20,8 @@ import {
   getVersion,
   listVersions,
   setVisibility,
+  setTags,
+  popularTags,
   setStar,
   renameProject,
   restoreVersion,
@@ -71,8 +73,10 @@ const typeDefs = /* GraphQL */ `
     run(id: ID!): Run
     "A shared project, or null if the link is unknown (or private and not yours)"
     project(slug: String!): Project
-    "Public projects, newest or most starred first"
-    explore(sort: ExploreSort = NEWEST): [ProjectSummary!]!
+    "Public projects, newest or most starred first, optionally only those with a tag"
+    explore(sort: ExploreSort = NEWEST, tag: String): [ProjectSummary!]!
+    "The most used tags on public projects"
+    popularTags: [TagCount!]!
     "Someone's public profile and public projects, or null if there's no such user"
     userProfile(login: String!): UserProfile
     "The signed-in user, or null"
@@ -98,6 +102,8 @@ const typeDefs = /* GraphQL */ `
     renameProject(slug: String!, title: String!): Project!
     "public (listed on Explore), unlisted (anyone with the link) or private (only you)"
     setProjectVisibility(slug: String!, visibility: Visibility!): Project!
+    "Up to 5 tags like game or data-science on a project you own (replaces the old ones)"
+    setProjectTags(slug: String!, tags: [String!]!): Project!
     "Star (or unstar) a project you can see"
     starProject(slug: String!, starred: Boolean!): StarState!
     "Delete a project you own (cannot be undone)"
@@ -145,6 +151,12 @@ const typeDefs = /* GraphQL */ `
     visibility: Visibility!
     ownerLogin: String
     starCount: Int!
+    tags: [String!]!
+  }
+
+  type TagCount {
+    tag: String!
+    count: Int!
   }
 
   type Subscription {
@@ -201,6 +213,7 @@ const typeDefs = /* GraphQL */ `
     starCount: Int!
     "False when signed out"
     starredByMe: Boolean!
+    tags: [String!]!
     title: String!
     files: [ProjectFile!]!
     folders: [String!]!
@@ -299,7 +312,9 @@ export const schema = createSchema<Context>({
         }
       },
       project: (_, { slug }: { slug: string }, { user }) => getProject(slug, user?.id),
-      explore: (_, { sort }: { sort: 'NEWEST' | 'STARS' }) => explore(sort === 'STARS' ? 'stars' : 'newest'),
+      explore: (_, { sort, tag }: { sort: 'NEWEST' | 'STARS'; tag?: string }) =>
+        explore(sort === 'STARS' ? 'stars' : 'newest', tag ?? undefined),
+      popularTags: () => popularTags(),
       userProfile: async (_, { login }: { login: string }) => {
         const [user, projects] = await Promise.all([getPublicUser(login), publicProjectsOf(login)]);
         if (!user) return null;
@@ -352,6 +367,12 @@ export const schema = createSchema<Context>({
         const signedIn = requireUser(user);
         await limitSaves(signedIn.id);
         return setVisibility(slug, visibility.toLowerCase() as Visibility, signedIn.id);
+      },
+
+      setProjectTags: async (_, { slug, tags }: { slug: string; tags: string[] }, { user }) => {
+        const signedIn = requireUser(user);
+        await limitSaves(signedIn.id);
+        return setTags(slug, tags, signedIn.id);
       },
 
       renameProject: async (_, { slug, title }: { slug: string; title: string }, { user }) => {

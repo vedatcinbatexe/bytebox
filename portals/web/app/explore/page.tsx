@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { UserMenu } from '@/components/UserMenu';
 import { ThemePicker } from '@/components/ThemePicker';
 import { useMe } from '@/lib/auth';
-import { fetchExplore, type ProjectSummary } from '@/lib/projects';
+import { fetchExplore, fetchPopularTags, type ProjectSummary } from '@/lib/projects';
 
 function timeAgo(iso: string): string {
   const date = new Date(iso.endsWith('Z') ? iso : `${iso}Z`);
@@ -17,7 +17,7 @@ function timeAgo(iso: string): string {
   return date.toLocaleDateString();
 }
 
-// Public projects from everyone, newest first
+// Public projects from everyone, newest first; ?tag=game shows only projects with that tag
 export default function ExplorePage() {
   const { user, loading } = useMe();
   const router = useRouter();
@@ -25,13 +25,36 @@ export default function ExplorePage() {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<'NEWEST' | 'STARS'>('NEWEST');
   const [error, setError] = useState<string | null>(null);
+  const [tag, setTag] = useState<string | null>(null);
+  const [popularTags, setPopularTags] = useState<{ tag: string; count: number }[]>([]);
+
+  // The tag comes from the link (?tag=…)
+  useEffect(() => {
+    setTag(new URLSearchParams(window.location.search).get('tag'));
+    fetchPopularTags()
+      .then(setPopularTags)
+      .catch(() => setPopularTags([]));
+  }, []);
 
   useEffect(() => {
+    let current = true; // ignore answers to older requests that arrive late
     setProjects(null);
-    fetchExplore(sort)
-      .then(setProjects)
-      .catch((loadError: Error) => setError(loadError.message));
-  }, [sort]);
+    fetchExplore(sort, tag ?? undefined)
+      .then((loaded) => current && setProjects(loaded))
+      .catch((loadError: Error) => current && setError(loadError.message));
+    return () => {
+      current = false;
+    };
+  }, [sort, tag]);
+
+  function chooseTag(next: string | null) {
+    setTag(next);
+    router.replace(next ? `/explore?tag=${encodeURIComponent(next)}` : '/explore', { scroll: false });
+  }
+
+  // Popular tags, plus the chosen one if it isn't among them
+  const tagChoices = popularTags.map((item) => item.tag);
+  if (tag && !tagChoices.includes(tag)) tagChoices.unshift(tag);
 
   const query = search.trim().toLowerCase();
   const shown = (projects ?? []).filter(
@@ -78,9 +101,30 @@ export default function ExplorePage() {
           </div>
         </div>
 
+        {tagChoices.length > 0 && (
+          <div className="mb-5 flex flex-wrap gap-1.5" aria-label="Filter by tag">
+            {tagChoices.map((choice) => (
+              <button
+                key={choice}
+                onClick={() => chooseTag(tag === choice ? null : choice)}
+                aria-pressed={tag === choice}
+                className={`rounded-full px-2.5 py-0.5 text-xs ${
+                  tag === choice ? 'bg-accent text-accent-fg' : 'bg-accent/15 text-accent hover:bg-accent/25'
+                }`}
+              >
+                #{choice}
+                {tag === choice && ' ×'}
+              </button>
+            ))}
+          </div>
+        )}
+
         {error && <p className="text-danger">{error}</p>}
         {projects === null && !error && <p className="text-subtle">Loading…</p>}
-        {projects?.length === 0 && (
+        {projects?.length === 0 && tag && (
+          <p className="text-sm text-muted">No public projects are tagged #{tag} yet.</p>
+        )}
+        {projects?.length === 0 && !tag && (
           <div className="rounded-lg border border-line bg-panel p-8 text-center text-muted">
             Nothing here yet. Make one of your projects <span className="text-fg">🌍 Public</span> to share it with everyone.
           </div>
@@ -111,6 +155,24 @@ export default function ExplorePage() {
                   </span>
                 ) : (
                   <span className="mb-3 text-xs text-muted">by someone</span>
+                )}
+                {project.tags.length > 0 && (
+                  <span className="mb-3 flex flex-wrap gap-1">
+                    {project.tags.map((projectTag) => (
+                      <span
+                        key={projectTag}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => {
+                          event.preventDefault(); // the card itself opens the project
+                          chooseTag(projectTag);
+                        }}
+                        className="rounded-full bg-accent/15 px-2 py-0.5 text-xs text-accent hover:bg-accent/25"
+                      >
+                        #{projectTag}
+                      </span>
+                    ))}
+                  </span>
                 )}
                 <span className="mt-auto flex justify-between text-xs text-subtle">
                   <span>

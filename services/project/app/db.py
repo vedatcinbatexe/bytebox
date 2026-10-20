@@ -8,6 +8,7 @@ database = client[os.environ.get("MONGO_DB", "bytebox")]
 # One document per project; the share slug is the _id, so it is unique
 projects = database["projects"]
 projects.create_index("owner_id")
+projects.create_index("tags")
 
 # One document per (project, user) star
 stars = database["stars"]
