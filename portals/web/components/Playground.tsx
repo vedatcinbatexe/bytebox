@@ -7,6 +7,7 @@ import Editor, { type OnMount } from '@monaco-editor/react';
 import { FileTree } from './FileTree';
 import { OutputPanel } from './OutputPanel';
 import { TerminalPanel } from './TerminalPanel';
+import { CommandsHelp } from './CommandsHelp';
 import { createRun, watchRun, type Run } from '@/lib/runs';
 import {
   MAX_FILES,
@@ -17,7 +18,6 @@ import {
   deletePath,
   editorLanguage,
   joinPath,
-  mergeFiles,
   parentFolder,
   renamePath,
   runLanguage,
@@ -26,6 +26,7 @@ import {
 } from '@/lib/project';
 import { STARTER_FILE, STARTER_PROJECT } from '@/lib/templates';
 import { load, save } from '@/lib/storage';
+import { applyChanges, type TerminalChanges } from '@/lib/terminalSync';
 import {
   createProject,
   editTokenFor,
@@ -103,6 +104,7 @@ export function Playground({ slug }: Props) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ text: string; isError: boolean } | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState('');
   const [run, setRun] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -304,10 +306,15 @@ export function Playground({ slug }: Props) {
 
   // ---------- Terminal ----------
 
-  function applyPulledFiles(files: { path: string; content: string }[], folders: string[], skipped: string[]) {
-    setWorkspace((current) => ({ ...current, project: mergeFiles(current.project, files, folders) }));
-    const note = skipped.length > 0 ? ` (skipped ${skipped.length} binary or large file(s))` : '';
-    showNotice(`Files refreshed from the terminal${note}`);
+  // Files created, edited, moved or deleted in the terminal
+  function applyTerminalChanges(changes: TerminalChanges) {
+    setWorkspace((current) => {
+      const isGone = (tab: string) => changes.deleted.includes(tab);
+      const openTabs = current.openTabs.filter((tab) => !isGone(tab));
+      const activePath =
+        current.activePath && isGone(current.activePath) ? (openTabs[0] ?? null) : current.activePath;
+      return { ...current, project: applyChanges(current.project, changes), openTabs, activePath };
+    });
   }
 
   // ---------- Running ----------
@@ -445,6 +452,13 @@ export function Playground({ slug }: Props) {
           {terminalOpen ? 'Hide terminal' : '>_ Terminal'}
         </button>
         <button
+          onClick={() => setHelpOpen(true)}
+          className={SECONDARY_BUTTON}
+          title="Which commands can I use in the terminal?"
+        >
+          ? Commands
+        </button>
+        <button
           onClick={runActiveFile}
           disabled={running || !canRun}
           title={canRun ? 'Run the open file (⌘/Ctrl + Enter)' : 'Open a .py, .js or .cpp file'}
@@ -463,6 +477,8 @@ export function Playground({ slug }: Props) {
           into your own copy.
         </p>
       )}
+
+      {helpOpen && <CommandsHelp onClose={() => setHelpOpen(false)} />}
 
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         {/* File explorer */}
@@ -550,8 +566,8 @@ export function Playground({ slug }: Props) {
           </div>
           {terminalOpen && (
             <TerminalPanel
-              files={project.files}
-              onPulled={applyPulledFiles}
+              project={project}
+              onTerminalChanges={applyTerminalChanges}
               onClose={() => setTerminalOpen(false)}
             />
           )}

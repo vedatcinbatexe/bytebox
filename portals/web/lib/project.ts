@@ -134,16 +134,3 @@ export function buildTree(project: Project): TreeNode[] {
   return root.children;
 }
 
-// Adds or updates files read back from the terminal. Files are never deleted here.
-export function mergeFiles(
-  project: Project,
-  files: { path: string; content: string }[],
-  folders: string[],
-): Project {
-  const merged = { ...project.files };
-  for (const file of files) {
-    if (file.path in merged || Object.keys(merged).length < MAX_FILES) merged[file.path] = file.content;
-  }
-  const known = new Set(allFolders(project));
-  return { files: merged, folders: [...project.folders, ...folders.filter((folder) => !known.has(folder))] };
-}
