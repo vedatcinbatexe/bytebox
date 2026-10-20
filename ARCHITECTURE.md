@@ -31,7 +31,7 @@
 | `services/gateway` | API gateway / BFF | Node.js, TypeScript, GraphQL Yoga | **GraphQL** | Redis (rate limits) | 4000 |
 | `services/identity` | Users & auth | .NET (ASP.NET Core) | **REST** | PostgreSQL `identity` | 5001 |
 | `services/execution` | Run lifecycle | .NET (ASP.NET Core) | **gRPC** (+ REST health) | PostgreSQL `execution`, Redis | 5002 |
-| `services/project` | Projects (files & folders) & sharing — renamed from `snippet` in Step 6 | Python, FastAPI | **REST** | MongoDB | 5003 |
+| `services/project` | Projects (files & folders) & sharing | Python, FastAPI | **REST** | MongoDB | 5003 |
 | `services/runner` | Sandbox worker (one-off runs) | Python | **RabbitMQ** consumer | – | – |
 | `services/terminal` | Terminal sessions (Step 6) | Node.js, TypeScript | **WebSocket** | Redis (sessions) | 4100 |
 
@@ -231,8 +231,7 @@ erDiagram
 
 ```json
 {
-  "_id": "ObjectId",
-  "slug": "a8Kx2p",
+  "_id": "a8Kx2pQ1",
   "ownerId": "uuid | null",
   "forkedFrom": "slug | null",
   "title": "My project",
@@ -241,13 +240,13 @@ erDiagram
     { "path": "utils/greet.py", "content": "def hello():\n    print('hi')" }
   ],
   "stdin": "",
-  "visibility": "public | unlisted",
+  "editTokenHash": "sha256 of the secret edit token",
   "createdAt": "date",
   "updatedAt": "date"
 }
 ```
 
-Folders are implied by file paths (`utils/greet.py`); an empty folder is stored as a `.keep` file.
+Folders are implied by file paths (`utils/greet.py`); empty folders are listed in `folders`. The 8-character share slug is the document `_id`.
 
 ---
 
@@ -266,7 +265,7 @@ bytebox/
     ├── gateway/              # Node.js GraphQL gateway → Dockerfile
     ├── identity/             # .NET REST service       → Dockerfile
     ├── execution/            # .NET gRPC service       → Dockerfile
-    ├── project/              # Python FastAPI service  → Dockerfile (snippet/ until Step 6)
+    ├── project/              # Python FastAPI service  → Dockerfile
     ├── terminal/             # Node.js WebSocket service → Dockerfile (Step 7)
     └── runner/               # Python sandbox worker   → Dockerfile
 ```
@@ -433,11 +432,16 @@ subscription {
 - [x] Tests: imports across files and folders in each language, reading project files, path traversal, limits, missing entry file
 
 ### Step 6 — Project Service & Sharing
-- [ ] Rename `services/snippet` → `services/project`
-- [ ] MongoDB `projects` collection with unique `slug` index
-- [ ] REST: create, get by slug, update, fork, delete
-- [ ] Gateway: project queries and mutations
-- [ ] Web: Save / Share button, `/p/[slug]` page, Fork button
+- [x] Rename `services/snippet` → `services/project`
+- [x] MongoDB `projects` collection; the 8-character share slug is the `_id` (unique)
+- [x] REST: create (or fork with `forkedFrom`), get by slug, update, delete
+- [x] **Edit tokens** (until login exists): creating a project returns a secret token, only its SHA-256 hash is stored; update and delete need `X-Edit-Token`
+- [x] Same project rules as runs: 50 files, 256 KB, safe paths, unique paths
+- [x] Gateway: `project(slug)` query, `createProject` and `updateProject` mutations
+- [x] Web: **Share** (local workspace → `/p/[slug]`, link copied), **Save** for owners, **Fork** for visitors, **Copy link**, editable title, not-found page, warning before leaving with unsaved changes
+- [x] Tests: create/get, update and delete need the token, fork gets its own token, invalid projects rejected
+
+> The browser that creates a project keeps its edit token in `localStorage`. Anyone else with the link can view, run and fork it. Step 8 (login) will let owners edit from any device.
 
 ### Step 7 — Terminal Sessions
 - [ ] **Workspace image:** Python, Node.js, g++, bash and coreutils in one image

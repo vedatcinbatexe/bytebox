@@ -11,6 +11,7 @@ import {
   type ProjectFile,
 } from './execution.js';
 import { isRateLimited } from './rateLimit.js';
+import { createProject, getProject, updateProject, type ProjectInput } from './projects.js';
 
 const languages = [
   { id: 'python', name: 'Python', extension: '.py' },
@@ -27,10 +28,16 @@ const typeDefs = /* GraphQL */ `
     health: String!
     languages: [Language!]!
     run(id: ID!): Run
+    "A shared project, or null if the link is unknown"
+    project(slug: String!): Project
   }
 
   type Mutation {
     createRun(input: CreateRunInput!): Run!
+    "Save a new project (or a fork, with forkedFrom). Keep the editToken: it is needed to save changes."
+    createProject(input: ProjectInput!, forkedFrom: String): SavedProject!
+    "Save changes to a project you created"
+    updateProject(slug: String!, editToken: String!, input: ProjectInput!): Project!
   }
 
   type Subscription {
@@ -57,6 +64,34 @@ const typeDefs = /* GraphQL */ `
     "Path of the file to run; its extension decides the language"
     entryFile: String!
     stdin: String
+  }
+
+  type ProjectFile {
+    path: String!
+    content: String!
+  }
+
+  type Project {
+    slug: String!
+    title: String!
+    files: [ProjectFile!]!
+    folders: [String!]!
+    stdin: String!
+    forkedFrom: String
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type SavedProject {
+    project: Project!
+    editToken: String!
+  }
+
+  input ProjectInput {
+    title: String!
+    files: [FileInput!]!
+    folders: [String!]!
+    stdin: String!
   }
 
   enum RunStatus {
@@ -128,9 +163,18 @@ export const schema = createSchema<Context>({
           throw toGraphQLError(error);
         }
       },
+      project: (_, { slug }: { slug: string }) => getProject(slug),
     },
 
     Mutation: {
+      createProject: (_, { input, forkedFrom }: { input: ProjectInput; forkedFrom?: string }) =>
+        createProject({ ...input, ...(forkedFrom ? { forkedFrom } : {}) }),
+
+      updateProject: (
+        _,
+        { slug, editToken, input }: { slug: string; editToken: string; input: ProjectInput },
+      ) => updateProject(slug, editToken, input),
+
       createRun: async (
         _,
         { input }: { input: { files: ProjectFile[]; entryFile: string; stdin?: string } },

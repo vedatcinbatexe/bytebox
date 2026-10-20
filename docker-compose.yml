@@ -89,11 +89,12 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  snippet:
+  project:
     restart: unless-stopped
-    build: ./services/snippet
+    build: ./services/project
     environment:
       MONGO_URL: mongodb://${MONGO_USER:-bytebox}:${MONGO_PASSWORD:-bytebox}@mongo:27017
+      MONGO_DB: bytebox
     ports:
       - '5003:8000'
     depends_on:
@@ -129,7 +130,7 @@ services:
       PORT: 4000
       IDENTITY_URL: http://identity:8080
       EXECUTION_GRPC_ADDRESS: execution:8081
-      SNIPPET_URL: http://snippet:8000
+      PROJECT_URL: http://project:8000
       REDIS_URL: redis://redis:6379
       RATE_LIMIT_RUNS_PER_MINUTE: 20
     ports:
@@ -137,7 +138,7 @@ services:
     depends_on:
       - identity
       - execution
-      - snippet
+      - project
       - redis
 
   # ---------- Portals ----------
