@@ -396,11 +396,16 @@ subscription {
 ```
 
 ### Step 4 — Web Portal: Editor & Run
-- [ ] GraphQL client (urql or Apollo)
-- [ ] Monaco editor + language picker + starter templates
-- [ ] Stdin panel, Run button, `Cmd/Ctrl + Enter`
-- [ ] Output panel: stdout, stderr, exit code, time, memory
-- [ ] Live output via subscription
+- [x] Small GraphQL client: `fetch` for queries/mutations, `EventSource` for subscriptions (no library needed)
+- [x] Monaco editor + language picker (loaded from `languages`) + starter template per language
+- [x] Stdin panel, Run button, `⌘/Ctrl + Enter`
+- [x] Output panel: stdout, stderr (red), exit code, time, status badge, truncation note
+- [x] Live status via `runUpdates` subscription
+- [x] Friendly errors: rate limited, API unreachable, invalid input
+- [x] Autosave language, code (per language) and stdin in `localStorage`
+- [x] Responsive: editor and output side by side on desktop, stacked on mobile
+
+> The browser calls the gateway directly at `NEXT_PUBLIC_GATEWAY_URL` (default `http://localhost:4000/graphql`). It is set as a Docker build argument because Next.js inlines it at build time.
 
 ### Step 5 — Snippet Service & Sharing
 - [ ] MongoDB connection + `snippets` collection with unique `slug` index
