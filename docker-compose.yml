@@ -102,9 +102,20 @@ services:
     build: ./services/runner
     environment:
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-bytebox}:${RABBITMQ_PASSWORD:-bytebox}@rabbitmq:5672
+    volumes:
+      # The runner starts sandbox containers through the host's Docker
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       rabbitmq:
         condition: service_healthy
+      sandbox-cpp:
+        condition: service_completed_successfully
+
+  # Builds the C++ sandbox image used by the runner, then exits
+  sandbox-cpp:
+    build: ./services/runner/images/cpp
+    image: bytebox/sandbox-cpp
+    command: ['true']
 
   gateway:
     restart: unless-stopped

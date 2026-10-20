@@ -147,7 +147,12 @@ sequenceDiagram
     W-->>U: Show output
 ```
 
-**Run states:** `queued → running → completed | failed | timed_out`
+**Run states:** `queued → running → completed | timed_out | memory_exceeded | failed`
+
+- `completed`: the program finished (any exit code, including compile errors)
+- `timed_out`: killed after the time limit
+- `memory_exceeded`: killed for using too much memory
+- `failed`: Bytebox could not run it (unknown language, code too large, internal error)
 
 ### Events (RabbitMQ)
 
@@ -155,7 +160,7 @@ sequenceDiagram
 |---|---|---|---|
 | `run.requested` | execution | runner | `runId, language, code, stdin, limits` |
 | `run.started` | runner | execution | `runId, startedAt` |
-| `run.completed` | runner | execution | `runId, status, stdout, stderr, exitCode, timeMs, memoryKb` |
+| `run.completed` | runner | execution | `runId, status, exitCode, stdout, stderr, truncated, timeMs` |
 
 ---
 
@@ -323,13 +328,24 @@ Each step ends with something runnable via `docker compose up`. Every step is a 
 **✅ Done when:** `docker compose up -d --build` starts everything and all health checks pass.
 
 ### Step 1 — Runner: Sandboxed Execution
-- [ ] Language configs (Python, JavaScript, C++)
-- [ ] Run code in a fresh Docker container (Docker socket mounted into runner)
-- [ ] Limits: timeout, memory, CPU, PIDs, output cap
-- [ ] Isolation: no network, read-only FS, non-root, drop capabilities
-- [ ] Always remove containers; label them for cleanup
-- [ ] Publish `run.completed` with output and metrics
-- [ ] Tests: hello world per language, infinite loop, fork bomb, memory bomb, network call, huge output
+- [x] Language configs (Python, JavaScript, C++ with a small Alpine + g++ image)
+- [x] Run code in a fresh Docker container (Docker socket mounted into runner)
+- [x] Limits: timeout, memory, CPU, PIDs, output cap (64 KB), code size (64 KB)
+- [x] Isolation: no network, read-only FS, non-root, drop capabilities, no-new-privileges
+- [x] Always remove containers; label them `bytebox=sandbox`
+- [x] Consume `run.requested`, publish `run.completed` with output, exit code and time
+- [x] Tests: hello world per language, compile/runtime errors, infinite loop, fork bomb, memory bomb, network call, read-only FS, non-root, huge output, output flood
+- [x] `send_job.py` script to try the runner by hand
+- [ ] Memory usage metric per run (later)
+
+**Try it:**
+
+```bash
+cd services/runner
+python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest                                   # sandbox tests
+.venv/bin/python send_job.py python examples/hello.py Vedat  # full round trip via RabbitMQ
+```
 
 ### Step 2 — Execution Service
 - [ ] `proto/execution.proto` (`CreateRun`, `GetRun`, `StreamRun`)
