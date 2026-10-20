@@ -1,22 +1,11 @@
 import { createServer } from 'node:http';
-import { createSchema, createYoga } from 'graphql-yoga';
+import { createYoga } from 'graphql-yoga';
+import { schema, type Context } from './schema.js';
 
 const port = Number(process.env.PORT ?? 4000);
 
-const yoga = createYoga({
-  schema: createSchema({
-    typeDefs: /* GraphQL */ `
-      type Query {
-        health: String!
-      }
-    `,
-    resolvers: {
-      Query: {
-        health: () => 'ok',
-      },
-    },
-  }),
-});
+// GraphiQL is served at /graphql in the browser; subscriptions use Server-Sent Events
+const yoga = createYoga<Context>({ schema });
 
 const server = createServer((req, res) => {
   if (req.url === '/health') {
@@ -24,7 +13,7 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify({ status: 'ok', service: 'gateway' }));
     return;
   }
-  yoga(req, res);
+  yoga(req, res, { req });
 });
 
 server.listen(port, () => {

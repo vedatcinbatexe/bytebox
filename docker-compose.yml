@@ -122,13 +122,16 @@ services:
 
   gateway:
     restart: unless-stopped
-    build: ./services/gateway
+    build:
+      context: . # repo root, so the build can read proto/
+      dockerfile: services/gateway/Dockerfile
     environment:
       PORT: 4000
       IDENTITY_URL: http://identity:8080
-      EXECUTION_URL: http://execution:8081 # gRPC
+      EXECUTION_GRPC_ADDRESS: execution:8081
       SNIPPET_URL: http://snippet:8000
       REDIS_URL: redis://redis:6379
+      RATE_LIMIT_RUNS_PER_MINUTE: 20
     ports:
       - '4000:4000'
     depends_on:
