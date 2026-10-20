@@ -1,8 +1,8 @@
 # Bytebox — Architecture Overview
 
-> An online code playground: write code in the browser, run it in an isolated sandbox, get the output back, and share snippets via link.
+> An online code playground: build multi-file projects in the browser, run any file in an isolated sandbox, use a simple terminal, and share projects via link.
 
-**Status:** Draft (v0.2) · **Style:** Microservices, one folder + one Dockerfile per domain, everything orchestrated with `docker-compose.yml`
+**Status:** Draft (v0.3) · **Style:** Microservices, one folder + one Dockerfile per domain, everything orchestrated with `docker-compose.yml`
 
 ---
 
@@ -11,12 +11,14 @@
 **Goals**
 - Run untrusted user code **safely** with strict CPU, memory, time, process and network limits.
 - Feel fast: a typical run finishes in **< 2s** end to end.
-- Share snippets with short, stable URLs (`/s/a8Kx2p`).
+- Multi-file projects: files and folders, run the currently open file.
+- A simple terminal per user session for basic shell commands.
+- Share projects with short, stable URLs (`/p/a8Kx2p`).
 - Each domain is an independent service that can be built, deployed and scaled on its own.
 
 **Non-goals (for v1)**
-- Full IDE features (multi-file projects, terminals, package installs).
-- Persistent long-running processes or servers inside the sandbox.
+- Full IDE features (debugger, extensions, package installs).
+- Servers or background processes that outlive a run or terminal session.
 - Network access from user code.
 
 ---
@@ -29,15 +31,16 @@
 | `services/gateway` | API gateway / BFF | Node.js, TypeScript, GraphQL Yoga | **GraphQL** | Redis (rate limits) | 4000 |
 | `services/identity` | Users & auth | .NET (ASP.NET Core) | **REST** | PostgreSQL `identity` | 5001 |
 | `services/execution` | Run lifecycle | .NET (ASP.NET Core) | **gRPC** (+ REST health) | PostgreSQL `execution`, Redis | 5002 |
-| `services/snippet` | Snippets & sharing | Python, FastAPI | **REST** | MongoDB | 5003 |
-| `services/runner` | Sandbox worker | Python | **RabbitMQ** consumer | – | – |
+| `services/project` | Projects (files & folders) & sharing — renamed from `snippet` in Step 6 | Python, FastAPI | **REST** | MongoDB | 5003 |
+| `services/runner` | Sandbox worker (one-off runs) | Python | **RabbitMQ** consumer | – | – |
+| `services/terminal` | Terminal sessions (Step 6) | Node.js, TypeScript | **WebSocket** | Redis (sessions) | 4100 |
 
 **Infrastructure**
 
 | Component | Purpose | Host port |
 |---|---|---|
 | PostgreSQL 16 | Relational data (users, runs) — one database per service | 5432 |
-| MongoDB 8 | Document data (snippets) | 27017 |
+| MongoDB 8 | Document data (projects) | 27017 |
 | Redis 7 | Cache, rate limits, run status, pub/sub | 6380 |
 | RabbitMQ 4 | Event bus between execution and runner | 5673 (UI: 15673) |
 
@@ -61,13 +64,15 @@ flowchart TB
 
     subgraph Services["⚙️ Domain Services"]
         identity["<b>identity</b><br/>.NET · REST"]
-        snippet["<b>snippet</b><br/>Python FastAPI · REST"]
+        project["<b>project</b><br/>Python FastAPI · REST"]
         execution["<b>execution</b><br/>.NET · gRPC"]
     end
 
     subgraph Workers["🔒 Execution Plane"]
         runner["<b>runner</b><br/>Python worker"]
         sandbox["🧪 Sandbox containers<br/>(one per run)"]
+        terminal["<b>terminal</b><br/>Node.js · WebSocket"]
+        workspace["🧪 Workspace containers<br/>(one per terminal session)"]
     end
 
     subgraph Data["🗄️ Data & Messaging"]
@@ -80,12 +85,12 @@ flowchart TB
     user --> web
     web -- "GraphQL" --> gateway
     gateway -- "REST" --> identity
-    gateway -- "REST" --> snippet
+    gateway -- "REST" --> project
     gateway -- "gRPC" --> execution
     gateway -. "rate limits" .-> redis
 
     identity --> pg
-    snippet --> mongo
+    project --> mongo
     execution --> pg
     execution -. "run status / pub-sub" .-> redis
 
@@ -95,6 +100,9 @@ flowchart TB
     mq -- "consume run.completed" --> execution
 
     runner -- "Docker API" --> sandbox
+    web -- "WebSocket" --> terminal
+    terminal -- "Docker API" --> workspace
+    terminal -. "sessions" .-> redis
 ```
 
 ### Communication styles
@@ -102,7 +110,8 @@ flowchart TB
 | From → To | Style | Why |
 |---|---|---|
 | web → gateway | **GraphQL** (HTTP, subscriptions over Server-Sent Events) | One flexible API for the UI, live run updates via subscriptions |
-| gateway → identity, snippet | **REST** | Simple CRUD resources |
+| gateway → identity, project | **REST** | Simple CRUD resources |
+| web → terminal | **WebSocket** | Interactive shell: keystrokes in, terminal output out |
 | gateway → execution | **gRPC** | Typed contract, fast internal calls, streaming output |
 | execution ↔ runner | **RabbitMQ events** | Decouples API from slow, risky execution; absorbs bursts; scale runners independently |
 | execution → gateway (live updates) | **gRPC server streaming** (`StreamRun`) | Gateway turns the stream into a GraphQL subscription |
@@ -202,15 +211,15 @@ erDiagram
     RUN {
         uuid id PK
         uuid userId "from identity (no FK across services)"
-        string snippetSlug "optional"
+        string projectSlug "optional"
         string language
-        text code
+        string entryFile
+        jsonb files
         enum status
         text stdout
         text stderr
         int exitCode
         int timeMs
-        int memoryKb
         timestamp createdAt
         timestamp finishedAt
     }
@@ -218,7 +227,7 @@ erDiagram
 
 - **identity → PostgreSQL `identity`:** `users`
 - **execution → PostgreSQL `execution`:** `runs`
-- **snippet → MongoDB `snippets` collection:**
+- **project → MongoDB `projects` collection:**
 
 ```json
 {
@@ -226,15 +235,19 @@ erDiagram
   "slug": "a8Kx2p",
   "ownerId": "uuid | null",
   "forkedFrom": "slug | null",
-  "title": "Hello world",
-  "language": "python",
-  "code": "print('hi')",
+  "title": "My project",
+  "files": [
+    { "path": "main.py", "content": "from utils.greet import hello\nhello()" },
+    { "path": "utils/greet.py", "content": "def hello():\n    print('hi')" }
+  ],
   "stdin": "",
-  "visibility": "public | unlisted | private",
+  "visibility": "public | unlisted",
   "createdAt": "date",
   "updatedAt": "date"
 }
 ```
+
+Folders are implied by file paths (`utils/greet.py`); an empty folder is stored as a `.keep` file.
 
 ---
 
@@ -253,7 +266,8 @@ bytebox/
     ├── gateway/              # Node.js GraphQL gateway → Dockerfile
     ├── identity/             # .NET REST service       → Dockerfile
     ├── execution/            # .NET gRPC service       → Dockerfile
-    ├── snippet/              # Python FastAPI service  → Dockerfile
+    ├── project/              # Python FastAPI service  → Dockerfile (snippet/ until Step 6)
+    ├── terminal/             # Node.js WebSocket service → Dockerfile (Step 7)
     └── runner/               # Python sandbox worker   → Dockerfile
 ```
 
@@ -273,7 +287,7 @@ docker compose down              # stop everything
 | http://localhost:5001/health | identity |
 | http://localhost:5002/health | execution (REST) |
 | localhost:50051 | execution (gRPC) |
-| http://localhost:5003/docs | snippet (Swagger UI) |
+| http://localhost:5003/docs | project (Swagger UI) |
 | http://localhost:15673 | RabbitMQ management UI |
 
 ---
@@ -290,7 +304,8 @@ flowchart TB
         web
         gateway
         identity
-        snippet
+        project
+        terminal
         execution
         pg[("PostgreSQL")]
         mongo[("MongoDB")]
@@ -303,7 +318,7 @@ flowchart TB
         runner2["runner"]
     end
 
-    gateway --> identity & snippet & execution
+    gateway --> identity & project & execution
     execution <--> mq
     mq <--> runner1 & runner2
 ```
@@ -407,33 +422,62 @@ subscription {
 
 > The browser calls the gateway directly at `NEXT_PUBLIC_GATEWAY_URL` (default `http://localhost:4000/graphql`). It is set as a Docker build argument because Next.js inlines it at build time.
 
-### Step 5 — Snippet Service & Sharing
-- [ ] MongoDB connection + `snippets` collection with unique `slug` index
-- [ ] REST: create, get by slug, fork, update, delete
-- [ ] Gateway: snippet queries and mutations
-- [ ] Web: Share button, `/s/[slug]` page, Fork button
+### Step 5 — Multi-File Projects (files & folders)
+- [ ] **Web:** file explorer on the left — create, rename, delete files and folders; open files in tabs
+- [ ] **Web:** Run executes the **currently open file**; language detected from the extension (`.py`, `.js`, `.cpp`)
+- [ ] **Gateway + execution:** `createRun` takes `files: [{ path, content }]` + `entryFile` instead of a single `code` string (update `execution.proto`)
+- [ ] **Runner:** receive all files as an archive, extract into `/tmp/project`, run the entry file (C++: compile the entry file together with the other `.cpp` files)
+- [ ] Limits: max 50 files, max 256 KB total, safe paths only (no `..`, no absolute paths)
+- [ ] Autosave the whole project in `localStorage`
+- [ ] Tests: imports across files and folders in each language, path traversal rejected, limits enforced
 
-### Step 6 — Identity Service & Auth
+### Step 6 — Project Service & Sharing
+- [ ] Rename `services/snippet` → `services/project`
+- [ ] MongoDB `projects` collection with unique `slug` index
+- [ ] REST: create, get by slug, update, fork, delete
+- [ ] Gateway: project queries and mutations
+- [ ] Web: Save / Share button, `/p/[slug]` page, Fork button
+
+### Step 7 — Terminal Sessions
+- [ ] **Workspace image:** Python, Node.js, g++, bash and coreutils in one image
+- [ ] **New `services/terminal`** (Node.js + `ws` + Docker API): one long-lived sandbox container per session
+- [ ] Browser ↔ terminal over **WebSocket**; shell runs with a TTY (`docker exec` / attach)
+- [ ] **Web:** terminal panel with **xterm.js**, resizable, opens on demand
+- [ ] **File sync (v1):** project files copied in when the session starts; editor saves pushed into the container; **Refresh** button pulls files created or changed in the terminal back into the file tree
+- [ ] Same sandbox rules as runs: no network, non-root, read-only root FS + writable `/workspace`, CPU / memory / PID limits
+- [ ] Session limits: anyone can open one, **1 session per IP**, closed after **15 min idle** or **1 hour** total; sessions tracked in Redis
+- [ ] Reaper that removes expired session containers
+- [ ] Tests: open session, run commands, file sync both ways, idle timeout, session limit
+
+```mermaid
+flowchart LR
+    web["web<br/>xterm.js"] -- "WebSocket" --> terminal["terminal service<br/>Node.js"]
+    terminal -- "Docker API<br/>exec with TTY" --> ws["🧪 Workspace container<br/>/workspace (project files)<br/>15 min idle / 1 h max"]
+    terminal -. "sessions, limits" .-> redis[("Redis")]
+```
+
+### Step 8 — Identity Service & Auth
 - [ ] `users` table (EF Core)
 - [ ] GitHub OAuth login
 - [ ] Issue JWT; gateway validates it and passes user id downstream
-- [ ] Web: login, user menu, "My Snippets" dashboard, run history
+- [ ] Web: login, user menu, "My Projects" dashboard, run history
+- [ ] Higher limits for logged-in users (runs, terminal time)
 
-### Step 7 — Abuse Protection & Hardening
-- [ ] Per-IP and per-user rate limits
+### Step 9 — Abuse Protection & Hardening
+- [ ] Per-IP and per-user rate limits everywhere (runs, sessions, saves)
 - [ ] Max concurrent runs per user, reject when queue is too deep
 - [ ] Orphan container reaper in runner
-- [ ] Custom seccomp profile, gVisor runtime
+- [ ] Custom seccomp profile, gVisor runtime for runs and terminal sessions
 - [ ] More languages (Go, Java, Rust, TypeScript)
 
-### Step 8 — Observability, CI/CD & Deployment
+### Step 10 — Observability, CI/CD & Deployment
 - [ ] Structured logs in every service, health/readiness checks
-- [ ] Metrics: queue depth, run latency, timeouts, error rate
+- [ ] Metrics: queue depth, run latency, timeouts, active terminal sessions, error rate
 - [ ] GitHub Actions: build + test each service, build Docker images
-- [ ] Deploy with compose on a VM, runners on a separate VM, TLS proxy
+- [ ] Deploy with compose on a VM, runners and terminal sessions on a separate VM, TLS proxy
 
-### Step 9 — Stretch Goals
-- [ ] Multi-file projects
+### Step 11 — Stretch Goals
+- [ ] Live two-way file sync between terminal and file tree
 - [ ] HTML/CSS/JS live preview (browser iframe)
 - [ ] Collaborative editing (Yjs)
 - [ ] Challenge mode with hidden test cases + leaderboard
@@ -451,5 +495,8 @@ subscription {
 | UI → backend | GraphQL via gateway | Single entry point, flexible queries, subscriptions for live output |
 | Internal sync calls | REST (CRUD), gRPC (execution) | REST for simple resources, gRPC for typed fast calls + streaming |
 | Async | RabbitMQ | Simple, reliable work queue; Kafka not needed at this scale |
-| Data | PostgreSQL (users, runs), MongoDB (snippets), Redis (cache/pub-sub) | Right store per data shape; each service owns its data |
+| Data | PostgreSQL (users, runs), MongoDB (projects), Redis (pub-sub, rate limits, sessions) | Right store per data shape; each service owns its data |
 | Isolation | Docker per run → gVisor later | Simple start, clear upgrade path |
+| Multi-file runs | Whole project sent with each run, entry = open file | Runs stay stateless and one-off; same runner design as single files |
+| Terminal | Separate long-lived session containers + WebSocket service | Interactive shells need state and a live connection; keep them apart from one-off runs |
+| Terminal ↔ file tree | Push on save + Refresh button (v1) | Simple and reliable; live two-way sync later |
