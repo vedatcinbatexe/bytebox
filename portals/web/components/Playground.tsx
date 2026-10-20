@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Editor, { type OnMount } from '@monaco-editor/react';
-import { FileTree } from './FileTree';
+import { DRAG_TYPE, FileTree } from './FileTree';
 import { OutputPanel, isFinished } from './OutputPanel';
 import { PreviewPanel } from './PreviewPanel';
 import { SearchPanel } from './SearchPanel';
@@ -34,6 +34,7 @@ import {
   deletePath,
   editorLanguage,
   joinPath,
+  moveTarget,
   parentFolder,
   renamePath,
   runLanguage,
@@ -489,10 +490,8 @@ export function Playground({ slug }: Props) {
     setSelectedFolder(path);
   }
 
-  function rename(path: string) {
-    if (!canChange()) return;
-    const newPath = askForNewPath('Rename to', parentFolder(path), path.split('/').pop());
-    if (!newPath) return;
+  // Rename or move a file/folder; open tabs follow it
+  function movePath(path: string, newPath: string) {
     const move = (tab: string) =>
       tab === path || tab.startsWith(`${path}/`) ? newPath + tab.slice(path.length) : tab;
     update({
@@ -500,6 +499,24 @@ export function Playground({ slug }: Props) {
       openTabs: openTabs.map(move),
       activePath: activePath ? move(activePath) : null,
     });
+  }
+
+  function rename(path: string) {
+    if (!canChange()) return;
+    const newPath = askForNewPath('Rename to', parentFolder(path), path.split('/').pop());
+    if (newPath) movePath(path, newPath);
+  }
+
+  // Drag & drop in the file tree ('' = project root)
+  function moveInto(from: string, toFolder: string) {
+    if (!canChange()) return;
+    const target = moveTarget(project, from, toFolder);
+    if ('error' in target) {
+      if (target.error) showNotice(target.error, true);
+      return;
+    }
+    movePath(from, target.to);
+    showNotice(`Moved to ${toFolder || 'the project root'}`);
   }
 
   function remove(path: string) {
@@ -788,6 +805,17 @@ export function Playground({ slug }: Props) {
                 // Clicking empty space selects the project root
                 if (event.target === event.currentTarget) setSelectedFolder('');
               }}
+              // Dropping on empty space moves to the project root
+              onDragOver={(event) => {
+                if (event.dataTransfer.types.includes(DRAG_TYPE)) event.preventDefault();
+              }}
+              onDrop={(event) => {
+                const from = event.dataTransfer.getData(DRAG_TYPE);
+                if (from) {
+                  event.preventDefault();
+                  moveInto(from, '');
+                }
+              }}
             >
               <FileTree
                 nodes={buildTree(project)}
@@ -797,6 +825,7 @@ export function Playground({ slug }: Props) {
                 onSelectFolder={setSelectedFolder}
                 onRename={rename}
                 onDelete={remove}
+                onMove={moveInto}
               />
             </div>
           )}

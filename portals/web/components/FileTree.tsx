@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import type { TreeNode } from '@/lib/project';
 
+// Drag data type for moving files and folders inside the tree
+export const DRAG_TYPE = 'application/x-bytebox-path';
+
 interface Props {
   nodes: TreeNode[];
   activePath: string | null;
@@ -11,10 +14,12 @@ interface Props {
   onSelectFolder: (path: string) => void;
   onRename: (path: string) => void;
   onDelete: (path: string) => void;
+  onMove: (from: string, toFolder: string) => void;
 }
 
 export function FileTree(props: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   function toggle(path: string) {
     setCollapsed((current) => {
@@ -34,8 +39,33 @@ export function FileTree(props: Props) {
       return (
         <li key={node.path}>
           <div
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.setData(DRAG_TYPE, node.path);
+              event.dataTransfer.effectAllowed = 'move';
+            }}
+            onDragOver={(event) => {
+              if (!isFolder || !event.dataTransfer.types.includes(DRAG_TYPE)) return;
+              event.preventDefault(); // allow dropping here
+              event.stopPropagation();
+              setDropTarget(node.path);
+            }}
+            onDragLeave={() => setDropTarget((current) => (current === node.path ? null : current))}
+            onDrop={(event) => {
+              if (!isFolder) return;
+              event.preventDefault();
+              event.stopPropagation();
+              setDropTarget(null);
+              const from = event.dataTransfer.getData(DRAG_TYPE);
+              if (from) props.onMove(from, node.path);
+            }}
+            onDragEnd={() => setDropTarget(null)}
             className={`group flex cursor-pointer items-center gap-1 py-1 pr-2 text-sm ${
-              isActive ? 'bg-raised text-fg' : 'text-fg hover:bg-raised'
+              dropTarget === node.path
+                ? 'bg-accent/20 text-fg ring-1 ring-accent ring-inset'
+                : isActive
+                  ? 'bg-raised text-fg'
+                  : 'text-fg hover:bg-raised'
             }`}
             style={{ paddingLeft: 8 + depth * 14 }}
             onClick={() => {

@@ -144,3 +144,16 @@ export function buildTree(project: Project): TreeNode[] {
   return root.children;
 }
 
+
+// Where a file or folder ends up when dropped on a folder ('' = project root),
+// or an error message if it can't go there
+export function moveTarget(project: Project, from: string, toFolder: string): { to: string } | { error: string } {
+  const name = from.split('/').pop()!;
+  const to = joinPath(toFolder, name);
+  if (to === from) return { error: '' }; // dropped where it already is: nothing to do
+  if (toFolder === from || toFolder.startsWith(`${from}/`)) {
+    return { error: 'A folder can’t be moved into itself' };
+  }
+  const problem = checkNewPath(project, to);
+  return problem ? { error: problem } : { to };
+}
