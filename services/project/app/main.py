@@ -18,6 +18,7 @@ from .models import (
     StarState,
     ProjectPatch,
     TagCount,
+    ProjectStats,
     Version,
     VersionSummary,
 )
@@ -77,6 +78,16 @@ def explore(limit: int = 50, sort: str = "newest", tag: str | None = None):
     query = {"visibility": "public", **({"tags": tag.lower()} if tag else {})}
     documents = db.projects.find(query).sort(order).limit(min(max(limit, 1), 100))
     return [summary(document) for document in documents]
+
+
+@app.get("/stats", response_model=ProjectStats)
+def stats():
+    """Numbers for the public stats page."""
+    return ProjectStats(
+        projects=db.projects.count_documents({}),
+        public_projects=db.projects.count_documents({"visibility": "public"}),
+        stars=db.stars.count_documents({}),
+    )
 
 
 @app.get("/tags", response_model=list[TagCount])

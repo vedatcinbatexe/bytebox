@@ -115,6 +115,12 @@ class ProjectSummary(Model):
     tags: list[str] = []
 
 
+class ProjectStats(Model):
+    projects: int
+    public_projects: int
+    stars: int
+
+
 class TagCount(Model):
     tag: str
     count: int

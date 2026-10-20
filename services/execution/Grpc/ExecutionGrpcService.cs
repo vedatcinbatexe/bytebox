@@ -109,6 +109,52 @@ public class ExecutionGrpcService(ExecutionDb db, RunQueue queue, IConnectionMul
         return response;
     }
 
+    public override async Task<RunStats> GetStats(GetStatsRequest request, ServerCallContext context)
+    {
+        var token = context.CancellationToken;
+        var now = DateTime.UtcNow;
+        var weekStart = now.Date.AddDays(-6);
+
+        var languages = await db.Runs.AsNoTracking()
+            .GroupBy(r => r.Language)
+            .Select(g => new
+            {
+                Language = g.Key,
+                Runs = g.Count(),
+                AverageTimeMs = g.Where(r => r.Status != Run.Queued).Average(r => (double?)r.TimeMs) ?? 0,
+            })
+            .OrderByDescending(g => g.Runs)
+            .ToListAsync(token);
+        var statuses = await db.Runs.AsNoTracking()
+            .GroupBy(r => r.Status)
+            .Select(g => new { Status = g.Key, Runs = g.Count() })
+            .ToListAsync(token);
+        var days = await db.Runs.AsNoTracking()
+            .Where(r => r.CreatedAt >= weekStart)
+            .GroupBy(r => r.CreatedAt.Date)
+            .Select(g => new { Day = g.Key, Runs = g.Count() })
+            .ToListAsync(token);
+
+        var stats = new RunStats
+        {
+            TotalRuns = languages.Sum(l => l.Runs),
+            RunsLast24H = await db.Runs.CountAsync(r => r.CreatedAt >= now.AddHours(-24), token),
+        };
+        stats.Languages.AddRange(languages.Select(l => new LanguageStats
+        {
+            Language = l.Language,
+            Runs = l.Runs,
+            AverageTimeMs = (int)Math.Round(l.AverageTimeMs),
+        }));
+        stats.Statuses.AddRange(statuses.Select(s => new StatusCount { Status = s.Status, Runs = s.Runs }));
+        for (var day = weekStart; day <= now.Date; day = day.AddDays(1))
+        {
+            var runs = days.FirstOrDefault(d => d.Day == day)?.Runs ?? 0;
+            stats.Last7Days.Add(new DayCount { Day = day.ToString("yyyy-MM-dd"), Runs = runs });
+        }
+        return stats;
+    }
+
     // While a run is going, show the output it has printed so far as status "running"
     private async Task<RunMessage> WithLiveOutputAsync(Run run)
     {

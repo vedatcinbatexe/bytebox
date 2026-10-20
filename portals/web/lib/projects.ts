@@ -218,3 +218,23 @@ export async function setVisibility(slug: string, visibility: Visibility): Promi
     { slug, visibility },
   );
 }
+
+export interface PlatformStats {
+  users: number;
+  projects: number;
+  publicProjects: number;
+  stars: number;
+  totalRuns: number;
+  runsLast24h: number;
+  languages: { language: string; runs: number; averageTimeMs: number }[];
+  statuses: { status: string; runs: number }[];
+  last7Days: { day: string; runs: number }[];
+}
+
+export async function fetchStats(): Promise<PlatformStats> {
+  const data = await request<{ stats: PlatformStats }>(
+    `{ stats { users projects publicProjects stars totalRuns runsLast24h
+      languages { language runs averageTimeMs } statuses { status runs } last7Days { day runs } } }`,
+  );
+  return data.stats;
+}

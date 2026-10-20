@@ -56,6 +56,19 @@ export async function listRuns(userId: string, limit: number): Promise<GrpcRun[]
   return response.runs ?? [];
 }
 
+// RunStats from execution.proto; zero numbers are left out (defaults: false)
+export interface GrpcRunStats {
+  totalRuns?: number;
+  runsLast_24h?: number;
+  languages?: { language: string; runs?: number; averageTimeMs?: number }[];
+  statuses?: { status: string; runs?: number }[];
+  last_7Days?: { day: string; runs?: number }[];
+}
+
+export function getRunStats(): Promise<GrpcRunStats> {
+  return unary<GrpcRunStats>('GetStats', {});
+}
+
 export function getRun(runId: string): Promise<GrpcRun> {
   return unary<GrpcRun>('GetRun', { runId });
 }

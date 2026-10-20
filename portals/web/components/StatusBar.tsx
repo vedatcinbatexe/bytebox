@@ -11,7 +11,7 @@ interface Props {
   onShowSettings: () => void;
 }
 
-const LANGUAGE_NAMES: Record<string, string> = {
+export const LANGUAGE_NAMES: Record<string, string> = {
   python: 'Python',
   javascript: 'JavaScript',
   typescript: 'TypeScript',

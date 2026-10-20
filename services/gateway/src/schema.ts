@@ -34,6 +34,7 @@ import {
 } from './projects.js';
 import type { SessionUser } from './auth.js';
 import { getPublicUser } from './identity.js';
+import { platformStats } from './stats.js';
 
 const languages = [
   { id: 'python', name: 'Python', extension: '.py' },
@@ -77,6 +78,8 @@ const typeDefs = /* GraphQL */ `
     explore(sort: ExploreSort = NEWEST, tag: String): [ProjectSummary!]!
     "The most used tags on public projects"
     popularTags: [TagCount!]!
+    "Public numbers about Bytebox (refreshed every 30 seconds)"
+    stats: PlatformStats!
     "Someone's public profile and public projects, or null if there's no such user"
     userProfile(login: String!): UserProfile
     "The signed-in user, or null"
@@ -152,6 +155,36 @@ const typeDefs = /* GraphQL */ `
     ownerLogin: String
     starCount: Int!
     tags: [String!]!
+  }
+
+  type PlatformStats {
+    users: Int!
+    projects: Int!
+    publicProjects: Int!
+    stars: Int!
+    totalRuns: Int!
+    runsLast24h: Int!
+    "Most used first"
+    languages: [LanguageStats!]!
+    statuses: [StatusCount!]!
+    "Runs per day (UTC), oldest first"
+    last7Days: [DayCount!]!
+  }
+
+  type LanguageStats {
+    language: String!
+    runs: Int!
+    averageTimeMs: Int!
+  }
+
+  type StatusCount {
+    status: String!
+    runs: Int!
+  }
+
+  type DayCount {
+    day: String!
+    runs: Int!
   }
 
   type TagCount {
@@ -315,6 +348,13 @@ export const schema = createSchema<Context>({
       explore: (_, { sort, tag }: { sort: 'NEWEST' | 'STARS'; tag?: string }) =>
         explore(sort === 'STARS' ? 'stars' : 'newest', tag ?? undefined),
       popularTags: () => popularTags(),
+      stats: async () => {
+        try {
+          return await platformStats();
+        } catch (error) {
+          throw toGraphQLError(error);
+        }
+      },
       userProfile: async (_, { login }: { login: string }) => {
         const [user, projects] = await Promise.all([getPublicUser(login), publicProjectsOf(login)]);
         if (!user) return null;

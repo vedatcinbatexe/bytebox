@@ -8,6 +8,12 @@ export interface PublicUser {
   createdAt: string;
 }
 
+export async function getUserCount(): Promise<number> {
+  const response = await fetch(`${baseUrl}/stats`);
+  if (!response.ok) throw new Error(`Identity service error: ${response.status}`);
+  return ((await response.json()) as { users: number }).users;
+}
+
 export async function getPublicUser(login: string): Promise<PublicUser | null> {
   const response = await fetch(`${baseUrl}/users/${encodeURIComponent(login)}`);
   if (response.status === 404) return null;

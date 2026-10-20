@@ -75,7 +75,10 @@ export default function ExplorePage() {
       <main className="mx-auto max-w-5xl p-6">
         <h1 className="mb-1 text-2xl font-bold">🌍 Explore</h1>
         <p className="mb-5 text-sm text-muted">
-          Public projects from the Bytebox community. Open one to run it, or fork it to make it yours.
+          Public projects from the Bytebox community. Open one to run it, or fork it to make it yours.{' '}
+          <Link href="/stats" className="text-accent hover:underline">
+            📊 Stats
+          </Link>
         </p>
         <div className="mb-5 flex gap-2">
           <input
