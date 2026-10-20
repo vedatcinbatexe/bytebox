@@ -53,6 +53,18 @@ class RenameInput(Model):
     title: str = Field(min_length=1, max_length=100)
 
 
+class VersionSummary(Model):
+    id: str
+    title: str
+    file_count: int
+    saved_at: datetime
+
+
+class Version(ProjectInput):
+    id: str
+    saved_at: datetime
+
+
 class CreateProjectInput(ProjectInput):
     forked_from: str | None = None
 

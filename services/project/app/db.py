@@ -8,3 +8,7 @@ database = client[os.environ.get("MONGO_DB", "bytebox")]
 # One document per project; the share slug is the _id, so it is unique
 projects = database["projects"]
 projects.create_index("owner_id")
+
+# Earlier versions of projects, saved before every change (newest kept, see main.py)
+versions = database["project_versions"]
+versions.create_index([("project_id", 1), ("saved_at", -1)])

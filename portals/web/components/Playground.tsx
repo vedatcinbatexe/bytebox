@@ -12,6 +12,7 @@ import { ResizeHandle } from './ResizeHandle';
 import { StatusBar } from './StatusBar';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { CommandPalette, type Command } from './CommandPalette';
+import { HistoryPanel } from './HistoryPanel';
 import { THEMES, setTheme } from '@/lib/theme';
 import { DEFAULT_SIZES, clampSize, loadSizes, saveSizes, type PanelSizes } from '@/lib/layout';
 import { htmlFiles } from '@/lib/preview';
@@ -124,6 +125,7 @@ export function Playground({ slug }: Props) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [cursor, setCursor] = useState<{ line: number; column: number } | null>(null);
   const [asideTab, setAsideTab] = useState<'output' | 'preview'>('output');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -354,7 +356,12 @@ export function Playground({ slug }: Props) {
       );
     }
     if (!slug) commands.push(action('share', 'Share (save and get a link)', () => void share()));
-    if (slug && isOwner) commands.push(action('save', 'Save', () => void saveChanges(), '⌘S'));
+    if (slug && isOwner) {
+      commands.push(
+        action('save', 'Save', () => void saveChanges(), '⌘S'),
+        action('history', 'Version history', () => setHistoryOpen(true)),
+      );
+    }
     if (slug) commands.push(action('fork', 'Fork (make your own copy)', () => void fork()));
     commands.push(
       action('shortcuts', 'Keyboard shortcuts', () => setShortcutsOpen(true), '?'),
@@ -676,6 +683,11 @@ export function Playground({ slug }: Props) {
               {busy ? 'Saving…' : hasUnsavedChanges ? '● Save' : '✓ Saved'}
             </button>
           )}
+          {slug && isOwner && (
+            <button onClick={() => setHistoryOpen(true)} className={SECONDARY_BUTTON} title="Earlier versions of this project">
+              🕘 History
+            </button>
+          )}
           {slug && (
             <>
               <button
@@ -985,6 +997,18 @@ export function Playground({ slug }: Props) {
         onShowShortcuts={() => setShortcutsOpen(true)}
       />
       {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+      {historyOpen && slug && (
+        <HistoryPanel
+          slug={slug}
+          onClose={() => setHistoryOpen(false)}
+          onRestored={(saved) => {
+            const restored = workspaceFor(saved);
+            setWorkspace(restored);
+            setSavedSnapshot(snapshot(restored));
+            showNotice('Version restored');
+          }}
+        />
+      )}
       {paletteOpen && <CommandPalette commands={paletteCommands()} onClose={() => setPaletteOpen(false)} />}
     </div>
   );
