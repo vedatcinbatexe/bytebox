@@ -1,11 +1,17 @@
 import { createServer } from 'node:http';
 import { createYoga } from 'graphql-yoga';
 import { schema, type Context } from './schema.js';
+import { getUser } from './auth.js';
 
 const port = Number(process.env.PORT ?? 4000);
 
-// GraphiQL is served at /graphql in the browser; subscriptions use Server-Sent Events
-const yoga = createYoga<Context>({ schema });
+// GraphiQL is served at /graphql in the browser; subscriptions use Server-Sent Events.
+// CORS allows the web portal to send the session cookie (credentials).
+const yoga = createYoga<Pick<Context, 'req'>, Context>({
+  schema,
+  cors: { origin: process.env.WEB_ORIGIN ?? 'http://localhost:3000', credentials: true },
+  context: async ({ req }) => ({ req, user: await getUser(req) }),
+});
 
 const server = createServer((req, res) => {
   if (req.url === '/health') {

@@ -1,6 +1,11 @@
 import { createServer } from 'node:http';
 import { WebSocketServer } from 'ws';
+import type { IncomingMessage } from 'node:http';
+import { getUserId } from './auth.js';
 import { openSession, removeExpiredContainers } from './session.js';
+
+// Set during the handshake once the session cookie is verified
+const userIds = new WeakMap<IncomingMessage, string>();
 
 const port = Number(process.env.PORT ?? 4100);
 // Only the Bytebox web portal may open terminals (stops other websites from using a visitor's browser)
@@ -18,12 +23,22 @@ const server = createServer((req, res) => {
 const wss = new WebSocketServer({
   server,
   maxPayload: 1024 * 1024,
-  verifyClient: ({ origin }: { origin: string }, accept: (ok: boolean, code?: number) => void) =>
-    accept(allowedOrigins.includes(origin), 403),
+  // Only the web portal, and only signed-in users
+  verifyClient: (
+    { origin, req }: { origin: string; req: IncomingMessage },
+    accept: (ok: boolean, code?: number) => void,
+  ) => {
+    if (!allowedOrigins.includes(origin)) return accept(false, 403);
+    getUserId(req).then((userId) => {
+      if (!userId) return accept(false, 401);
+      userIds.set(req, userId);
+      accept(true);
+    });
+  },
 });
 
 wss.on('connection', (ws, req) => {
-  openSession(ws, req.socket.remoteAddress ?? 'unknown');
+  openSession(ws, userIds.get(req)!);
 });
 
 // Sessions don't survive a restart, so clean up containers from before; then sweep every minute

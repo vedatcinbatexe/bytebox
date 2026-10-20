@@ -13,18 +13,32 @@ export interface ProjectInput {
 export interface Project extends ProjectInput {
   slug: string;
   forkedFrom: string | null;
+  ownerId: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-async function call<T>(method: string, path: string, body?: object, editToken?: string): Promise<T | null> {
+export interface ProjectSummary {
+  slug: string;
+  title: string;
+  fileCount: number;
+  updatedAt: string;
+}
+
+// userId is only ever set by the gateway, from a verified session
+async function call<T>(
+  method: string,
+  path: string,
+  options: { body?: object; userId?: string } = {},
+): Promise<T | null> {
+  const { body, userId } = options;
   let response: Response;
   try {
     response = await fetch(`${baseUrl}${path}`, {
       method,
       headers: {
         'Content-Type': 'application/json',
-        ...(editToken ? { 'X-Edit-Token': editToken } : {}),
+        ...(userId ? { 'X-User-Id': userId } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -36,8 +50,11 @@ async function call<T>(method: string, path: string, body?: object, editToken?: 
   }
 
   if (response.status === 404) return null;
+  if (response.status === 401) {
+    throw new GraphQLError('Log in or sign up first', { extensions: { code: 'UNAUTHENTICATED' } });
+  }
   if (response.status === 403) {
-    throw new GraphQLError("You can't edit this project", { extensions: { code: 'FORBIDDEN' } });
+    throw new GraphQLError('Only the owner can change this project', { extensions: { code: 'FORBIDDEN' } });
   }
   if (response.status === 422) {
     // FastAPI validation error: { detail: [{ msg, loc }] }
@@ -56,18 +73,26 @@ export function getProject(slug: string): Promise<Project | null> {
   return call<Project>('GET', `/projects/${encodeURIComponent(slug)}`);
 }
 
+export function listMyProjects(userId: string): Promise<ProjectSummary[] | null> {
+  return call<ProjectSummary[]>('GET', '/projects', { userId });
+}
+
 export async function createProject(
   input: ProjectInput & { forkedFrom?: string },
-): Promise<{ project: Project; editToken: string }> {
-  const created = await call<{ project: Project; editToken: string }>('POST', '/projects', input);
+  userId: string,
+): Promise<Project> {
+  const created = await call<Project>('POST', '/projects', { body: input, userId });
   if (!created) {
     throw new GraphQLError('The project to fork was not found', { extensions: { code: 'NOT_FOUND' } });
   }
   return created;
 }
 
-export async function updateProject(slug: string, editToken: string, input: ProjectInput): Promise<Project> {
-  const updated = await call<Project>('PUT', `/projects/${encodeURIComponent(slug)}`, input, editToken);
+export async function updateProject(slug: string, input: ProjectInput, userId: string): Promise<Project> {
+  const updated = await call<Project>('PUT', `/projects/${encodeURIComponent(slug)}`, {
+    body: input,
+    userId,
+  });
   if (!updated) {
     throw new GraphQLError('Project not found', { extensions: { code: 'NOT_FOUND' } });
   }

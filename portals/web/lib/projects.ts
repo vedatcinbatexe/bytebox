@@ -1,5 +1,4 @@
 import { request } from './graphql';
-import { load, save } from './storage';
 import type { Project } from './project';
 
 export interface SavedProject {
@@ -8,6 +7,14 @@ export interface SavedProject {
   project: Project;
   stdin: string;
   forkedFrom: string | null;
+  ownedByMe: boolean;
+}
+
+export interface ProjectSummary {
+  slug: string;
+  title: string;
+  fileCount: number;
+  updatedAt: string;
 }
 
 interface ApiProject {
@@ -17,6 +24,7 @@ interface ApiProject {
   folders: string[];
   stdin: string;
   forkedFrom: string | null;
+  ownedByMe: boolean;
 }
 
 export interface ProjectInput {
@@ -25,7 +33,7 @@ export interface ProjectInput {
   stdin: string;
 }
 
-const PROJECT_FIELDS = 'slug title files { path content } folders stdin forkedFrom';
+const PROJECT_FIELDS = 'slug title files { path content } folders stdin forkedFrom ownedByMe';
 
 function fromApi(project: ApiProject): SavedProject {
   return {
@@ -37,6 +45,7 @@ function fromApi(project: ApiProject): SavedProject {
     },
     stdin: project.stdin,
     forkedFrom: project.forkedFrom,
+    ownedByMe: project.ownedByMe,
   };
 }
 
@@ -57,34 +66,30 @@ export async function fetchProject(slug: string): Promise<SavedProject | null> {
   return data.project ? fromApi(data.project) : null;
 }
 
-// Creates a new project (or a fork) and remembers its edit token in this browser
+// Creates a new project (or a fork) owned by the signed-in user
 export async function createProject(input: ProjectInput, forkedFrom?: string): Promise<SavedProject> {
-  const data = await request<{ createProject: { project: ApiProject; editToken: string } }>(
+  const data = await request<{ createProject: ApiProject }>(
     `mutation CreateProject($input: ProjectInput!, $forkedFrom: String) {
-      createProject(input: $input, forkedFrom: $forkedFrom) { editToken project { ${PROJECT_FIELDS} } }
+      createProject(input: $input, forkedFrom: $forkedFrom) { ${PROJECT_FIELDS} }
     }`,
     { input: toApi(input), forkedFrom },
   );
-  const { project, editToken } = data.createProject;
-  save(tokenKey(project.slug), editToken);
-  return fromApi(project);
+  return fromApi(data.createProject);
 }
 
 export async function updateProject(slug: string, input: ProjectInput): Promise<SavedProject> {
   const data = await request<{ updateProject: ApiProject }>(
-    `mutation UpdateProject($slug: String!, $editToken: String!, $input: ProjectInput!) {
-      updateProject(slug: $slug, editToken: $editToken, input: $input) { ${PROJECT_FIELDS} }
+    `mutation UpdateProject($slug: String!, $input: ProjectInput!) {
+      updateProject(slug: $slug, input: $input) { ${PROJECT_FIELDS} }
     }`,
-    { slug, editToken: editTokenFor(slug) ?? '', input: toApi(input) },
+    { slug, input: toApi(input) },
   );
   return fromApi(data.updateProject);
 }
 
-// Only the browser that created a project has its edit token
-export function editTokenFor(slug: string): string | null {
-  return load(tokenKey(slug));
-}
-
-function tokenKey(slug: string): string {
-  return `bytebox:token:${slug}`;
+export async function fetchMyProjects(): Promise<ProjectSummary[]> {
+  const data = await request<{ myProjects: ProjectSummary[] }>(
+    '{ myProjects { slug title fileCount updatedAt } }',
+  );
+  return data.myProjects;
 }

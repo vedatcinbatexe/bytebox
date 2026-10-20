@@ -29,7 +29,7 @@
 |---|---|---|---|---|---|
 | `portals/web` | Web portal (UI) | Next.js, TypeScript, Tailwind CSS | Web pages | – | 3000 |
 | `services/gateway` | API gateway / BFF | Node.js, TypeScript, GraphQL Yoga | **GraphQL** | Redis (rate limits) | 4000 |
-| `services/identity` | Users & auth | .NET (ASP.NET Core) | **REST** | PostgreSQL `identity` | 5001 |
+| `services/identity` | Users & GitHub login | .NET (ASP.NET Core) | **REST** (redirects + session cookie) | PostgreSQL `identity` | 5001 |
 | `services/execution` | Run lifecycle | .NET (ASP.NET Core) | **gRPC** (+ REST health) | PostgreSQL `execution`, Redis | 5002 |
 | `services/project` | Projects (files & folders) & sharing | Python, FastAPI | **REST** | MongoDB | 5003 |
 | `services/runner` | Sandbox worker (one-off runs) | Python | **RabbitMQ** consumer | – | – |
@@ -282,7 +282,7 @@ docker compose down              # stop everything
 |---|---|
 | http://localhost:3000 | Web portal |
 | http://localhost:4000/graphql | GraphQL API (GraphiQL in browser) |
-| http://localhost:5001/health | identity |
+| http://localhost:5001/health | identity (login at `/auth/github/login`) |
 | http://localhost:5002/health | execution (REST) |
 | localhost:50051 | execution (gRPC) |
 | http://localhost:5003/docs | project (Swagger UI) |
@@ -446,14 +446,18 @@ subscription {
 ### Step 7 — Terminal Sessions
 - [x] **Workspace image** (`bytebox/sandbox-workspace`): Alpine with bash, Python, Node.js, g++, coreutils, nano, less
 - [x] **New `services/terminal`** (Node.js + `ws` + Docker API): one long-lived workspace container per session; the shell runs as a `docker exec` with a TTY
-- [x] Browser ↔ terminal over **WebSocket** (JSON messages: `init`, `input`, `resize`, `sync`, `pull` → `ready`, `output`, `files`, `error`, `exit`)
+- [x] Browser ↔ terminal over **WebSocket** (JSON messages: `init`, `input`, `resize`, `sync`, `delete`, `pull` → `ready`, `output`, `files`, `error`, `exit`)
 - [x] **Web:** terminal panel with **xterm.js** under the editor, `>_ Terminal` button, Restart and Close
-- [x] **File sync (v1):** project files copied in at start; edited files pushed in automatically (only changed files, debounced); **Refresh files** pulls text files created or changed in the terminal into the file tree (adds/updates, never deletes; binaries and files > 64 KB skipped)
+- [x] **Web:** `? Commands` button opens a cheat sheet of terminal commands with examples
+- [x] **Live two-way file sync:**
+  - Terminal → file tree: the workspace is rescanned 400 ms after the shell goes quiet and every 5 s; when anything changed, the tree adds, updates, moves and deletes files and folders to match (binaries and files > 64 KB skipped)
+  - Editor → terminal: new, renamed and deleted files/folders are sent right away; typing inside a file is sent after 800 ms
+  - Edits not yet sent win over the terminal's copy; changes are numbered (`seq`) so scans taken before the latest editor change are ignored, and the service handles messages in order
 - [x] Same sandbox rules as runs: no network, `nobody` user, read-only root FS, writable `/workspace` and `/tmp` (tmpfs), no capabilities, 256 MB, half a CPU, 64 processes
-- [x] Session limits: **1 session per client IP** (a new one replaces the old one), closed after **15 min idle** or **1 hour**
+- [x] Session limits: **1 session per user** (a new one replaces the old one), closed after **15 min idle** or **1 hour** (was per IP before Step 8)
 - [x] Only the web portal's origin may connect (`ALLOWED_ORIGINS`), other sites get 403
 - [x] Cleanup: containers removed when a session ends, on service start, and by a sweep every minute
-- [x] Tests (8): run project files, non-root + no network + read-only, sync, pull (skips binaries), replace old session, `exit` ends session, invalid paths, foreign origin rejected
+- [x] Tests (10): run project files, non-root + no network + read-only, sync, pull (skips binaries), automatic change updates (create/move/delete), deletes and new folders from the editor, replace old session, `exit` ends session, invalid paths, foreign origin rejected
 
 ```mermaid
 flowchart LR
@@ -461,17 +465,25 @@ flowchart LR
     terminal -- "Docker API<br/>exec bash with TTY" --> ws["🧪 Workspace container<br/>/workspace (project files)<br/>15 min idle / 1 h max"]
 ```
 
-> Locally, every browser reaches the terminal service through Docker Desktop with the same address, so all local browsers count as one client: opening the terminal in a second browser replaces the first one's session.
-
 ### Step 8 — Identity Service & Auth
-- [ ] `users` table (EF Core)
-- [ ] GitHub OAuth login
-- [ ] Issue JWT; gateway validates it and passes user id downstream
-- [ ] Web: login, user menu, "My Projects" dashboard, run history
-- [ ] Higher limits for logged-in users (runs, terminal time)
+- [x] **GitHub login** (OAuth App, see `.env.example`): `/auth/github/login` → GitHub → `/auth/github/callback`, with a random `state` cookie against forged logins
+- [x] `users` table in PostgreSQL (EF Core migrations); the first login creates the account
+- [x] **Session:** signed JWT (7 days) in an httpOnly cookie `bytebox_session`; the gateway and terminal service verify it with the shared `JWT_SECRET`
+- [x] `/auth/logout`; redirects only to pages of the web portal (no open redirects)
+- [x] Dev-only login `/auth/dev/login?login=<name>` behind `DEV_LOGIN_ENABLED` (off by default)
+- [x] **Login required to run or change anything** (enforced in the backend, not only the UI):
+  - gateway: `createRun`, `createProject`, `updateProject` → `UNAUTHENTICATED` when signed out
+  - project service: create needs a user, update/delete only by the owner (edit tokens removed)
+  - terminal service: WebSocket handshake needs a valid session (401), one session **per user**
+  - viewing shared projects stays public
+- [x] Gateway: `me`, `myProjects`, `Project.ownedByMe`; runs stored with the user id; 60 runs/minute per user
+- [x] **Web:** profile section (avatar, name, My projects, Sign out) or **Log in**; `/login` page (Continue with GitHub, error messages); **"Login or sign up before making changes"** modal for guests on run, edit, terminal, new/rename/delete, stdin, share, save, fork; read-only editor for guests; **My projects** page at `/projects`
+- [ ] Run history page (later)
+
+> Projects made before login was required have no owner: anyone can view and fork them, nobody can save them.
 
 ### Step 9 — Abuse Protection & Hardening
-- [ ] Per-IP and per-user rate limits everywhere (runs, sessions, saves)
+- [ ] Rate limits for saves and terminal sessions (runs are already limited per user)
 - [ ] Max concurrent runs per user, reject when queue is too deep
 - [ ] Orphan container reaper in runner
 - [ ] Custom seccomp profile, gVisor runtime for runs and terminal sessions
@@ -484,7 +496,6 @@ flowchart LR
 - [ ] Deploy with compose on a VM, runners and terminal sessions on a separate VM, TLS proxy
 
 ### Step 11 — Stretch Goals
-- [ ] Live two-way file sync between terminal and file tree
 - [ ] HTML/CSS/JS live preview (browser iframe)
 - [ ] Collaborative editing (Yjs)
 - [ ] Challenge mode with hidden test cases + leaderboard
@@ -504,7 +515,9 @@ flowchart LR
 | Async | RabbitMQ | Simple, reliable work queue; Kafka not needed at this scale |
 | Data | PostgreSQL (users, runs), MongoDB (projects), Redis (pub-sub, rate limits, sessions) | Right store per data shape; each service owns its data |
 | Isolation | Docker per run → gVisor later | Simple start, clear upgrade path |
+| Auth | GitHub OAuth + JWT in an httpOnly cookie, verified by gateway and terminal | No passwords to store; one cookie works for GraphQL and WebSocket on the same site |
+| Who can run code | Signed-in users only (checked in the backend) | Running code costs resources and needs abuse limits per account |
 | Multi-file runs | Whole project sent with each run, entry = open file | Runs stay stateless and one-off; same runner design as single files |
 | Terminal | Separate long-lived session containers + WebSocket service | Interactive shells need state and a live connection; keep them apart from one-off runs |
-| Terminal ↔ file tree | Push changed files + Refresh button (v1) | Simple and reliable; live two-way sync later |
-| Terminal sessions | In memory, 1 per client IP | One terminal instance is enough for now; move to Redis when scaling out |
+| Terminal ↔ file tree | Live two-way sync: rescan after commands + every 5 s, numbered editor changes | Immediate updates without a file watcher in the sandbox; numbering avoids stale scans undoing edits |
+| Terminal sessions | In memory, 1 per user | One terminal instance is enough for now; move to Redis when scaling out |

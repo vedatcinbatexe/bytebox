@@ -2,7 +2,7 @@ import { PassThrough, type Duplex } from 'node:stream';
 import { StringDecoder } from 'node:string_decoder';
 import Docker from 'dockerode';
 import type { WebSocket } from 'ws';
-import { checkFiles, packFiles, unpackFiles } from './files.js';
+import { checkFiles, isSafePath, packFiles, unpackFiles } from './files.js';
 import type { ClientMessage, ProjectFile, ServerMessage } from './protocol.js';
 
 export const docker = new Docker();
@@ -11,18 +11,21 @@ const IMAGE = process.env.WORKSPACE_IMAGE ?? 'bytebox/sandbox-workspace';
 const IDLE_MS = Number(process.env.IDLE_MINUTES ?? 15) * 60_000;
 const MAX_MS = Number(process.env.MAX_MINUTES ?? 60) * 60_000;
 const USER = '65534:65534'; // nobody
+// The workspace is scanned shortly after the shell goes quiet, and regularly for programs that keep running
+const SCAN_AFTER_OUTPUT_MS = 400;
+const SCAN_EVERY_MS = 5000;
 export const LABEL = 'bytebox-terminal';
 
-// One terminal session per client (IP address). A new one replaces the old one.
+// One terminal session per user. A new one replaces the old one.
 const sessions = new Map<string, Session>();
 
-export function openSession(ws: WebSocket, clientId: string) {
-  console.log(`Session opened for ${clientId}`);
-  sessions.get(clientId)?.end('The terminal was opened in another tab');
+export function openSession(ws: WebSocket, userId: string) {
+  console.log(`Session opened for user ${userId}`);
+  sessions.get(userId)?.end('The terminal was opened in another tab');
   const session = new Session(ws, () => {
-    if (sessions.get(clientId) === session) sessions.delete(clientId);
+    if (sessions.get(userId) === session) sessions.delete(userId);
   });
-  sessions.set(clientId, session);
+  sessions.set(userId, session);
 }
 
 class Session {
@@ -31,13 +34,22 @@ class Session {
   private shellExec: Docker.Exec | null = null;
   private idleTimer: NodeJS.Timeout | null = null;
   private maxTimer: NodeJS.Timeout | null = null;
+  private scanTimer: NodeJS.Timeout | null = null;
+  private pollTimer: NodeJS.Timeout | null = null;
+  private lastSnapshot = '';
+  private scanning = false;
+  private scanAgain = false; // a change happened while scanning
+  private appliedSeq = 0; // last editor change applied to the workspace
+  private queue: Promise<void> = Promise.resolve(); // handle messages one at a time, in order
   private ended = false;
 
   constructor(
     private ws: WebSocket,
     private onEnd: () => void,
   ) {
-    ws.on('message', (raw) => this.handle(raw.toString()).catch((error) => this.fail(error)));
+    ws.on('message', (raw) => {
+      this.queue = this.queue.then(() => this.handle(raw.toString())).catch((error) => this.fail(error));
+    });
     ws.on('close', () => this.end());
   }
 
@@ -64,9 +76,15 @@ class Session {
         break;
       case 'sync':
         await this.writeFiles(message.files);
+        await this.createFolders(message.folders ?? []);
+        this.changeApplied(message.seq);
+        break;
+      case 'delete':
+        await this.deletePaths(message.paths);
+        this.changeApplied(message.seq);
         break;
       case 'pull':
-        this.send({ type: 'files', ...(await this.readFiles()) });
+        await this.scan(true);
         break;
     }
   }
@@ -121,11 +139,15 @@ class Session {
     await this.shellExec.resize({ h: rows, w: cols }).catch(() => {});
 
     const decoder = new StringDecoder('utf8');
-    this.shell.on('data', (chunk: Buffer) => this.send({ type: 'output', data: decoder.write(chunk) }));
+    this.shell.on('data', (chunk: Buffer) => {
+      this.send({ type: 'output', data: decoder.write(chunk) });
+      this.scheduleScan();
+    });
     this.shell.on('end', () => this.end('The shell exited'));
 
     this.resetIdleTimer();
     this.maxTimer = setTimeout(() => this.end('Sessions last at most 1 hour'), MAX_MS);
+    this.pollTimer = setInterval(() => void this.scan(), SCAN_EVERY_MS);
     this.send({ type: 'ready' });
   }
 
@@ -136,6 +158,60 @@ class Session {
     if (files.length === 0) return;
     const archive = await packFiles(files);
     await this.exec(['sh', '-c', `head -c ${archive.length} | tar -x -C /workspace -f -`], archive);
+  }
+
+  private async createFolders(folders: string[]) {
+    const safe = folders.filter(isSafePath);
+    if (safe.length > 0) await this.exec(['mkdir', '-p', '--', ...safe]);
+  }
+
+  // Remove files or (empty) folders, then any parent folders left empty
+  private async deletePaths(paths: string[]) {
+    const safe = paths.filter(isSafePath);
+    if (safe.length === 0) return;
+    const script = `for p in "$@"; do
+      if [ -d "$p" ]; then rmdir -- "$p" 2>/dev/null; else rm -f -- "$p"; fi
+      d=$(dirname -- "$p")
+      [ "$d" = . ] || rmdir -p --ignore-fail-on-non-empty -- "$d" 2>/dev/null
+    done; true`;
+    await this.exec(['sh', '-c', script, 'sh', ...safe]);
+  }
+
+  private changeApplied(seq?: number) {
+    if (seq !== undefined) this.appliedSeq = seq;
+    this.scheduleScan();
+  }
+
+  private scheduleScan() {
+    if (this.scanTimer) clearTimeout(this.scanTimer);
+    this.scanTimer = setTimeout(() => void this.scan(), SCAN_AFTER_OUTPUT_MS);
+  }
+
+  // Send the workspace files to the browser if they changed since the last scan
+  private async scan(force = false) {
+    if (this.ended || !this.container) return;
+    if (this.scanning) {
+      this.scanAgain = true;
+      return;
+    }
+    this.scanning = true;
+    const seq = this.appliedSeq;
+    try {
+      const result = await this.readFiles();
+      const snapshot = JSON.stringify([seq, result.files, result.folders]);
+      if (force || snapshot !== this.lastSnapshot) {
+        this.lastSnapshot = snapshot;
+        this.send({ type: 'files', ...result, seq });
+      }
+    } catch {
+      // the container may be stopping; the next scan will try again
+    } finally {
+      this.scanning = false;
+    }
+    if (this.scanAgain) {
+      this.scanAgain = false;
+      void this.scan();
+    }
   }
 
   private async readFiles() {
@@ -154,6 +230,7 @@ class Session {
       AttachStdout: true,
       AttachStderr: true,
       User: USER,
+      WorkingDir: '/workspace',
     });
     const stream = await exec.start({ hijack: true, stdin: Boolean(input) });
     const stdout = new PassThrough();
@@ -191,6 +268,8 @@ class Session {
     if (reason) this.send({ type: 'exit', reason });
     if (this.idleTimer) clearTimeout(this.idleTimer);
     if (this.maxTimer) clearTimeout(this.maxTimer);
+    if (this.scanTimer) clearTimeout(this.scanTimer);
+    if (this.pollTimer) clearInterval(this.pollTimer);
     this.shell?.destroy();
     this.ws.close();
     this.onEnd();
