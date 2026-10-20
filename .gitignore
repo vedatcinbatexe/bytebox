@@ -28,3 +28,6 @@ __pycache__/
 .DS_Store
 .vscode/
 .idea/
+
+# TypeScript build cache
+*.tsbuildinfo
