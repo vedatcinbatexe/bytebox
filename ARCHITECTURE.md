@@ -500,6 +500,7 @@ flowchart LR
 - [x] Gateway: `me`, `myProjects`, `Project.ownedByMe`; runs stored with the user id; 60 runs/minute per user
 - [x] **Web:** profile section (avatar, name, My projects, Sign out) or **Log in**; `/login` page (Continue with GitHub, error messages); **"Login or sign up before making changes"** modal for guests on run, edit, terminal, new/rename/delete, stdin, share, save, fork; read-only editor for guests; **My projects** page at `/projects`
 - [x] **Create workspace** (profile menu and My projects): pick a **template** (Blank JavaScript `init.js` "hello world", Python basics, Python data, Node.js app, C++ project, Algorithms), give it a name, and it opens ready to run
+- [x] **Status bar:** language, cursor position, line count, last run status and time, save state; **⌘/Ctrl + S** saves your own project; **?** or ⌨ Shortcuts opens the keyboard shortcuts list
 - [x] **Resizable panels** (desktop): drag the dividers of the file explorer, output panel and terminal; sizes remembered per browser, double-click resets
 - [x] **Format code:** ✨ Format (tab bar) or Shift + Alt + F formats JavaScript, TypeScript, JSON, CSS, HTML and Markdown with Prettier, loaded only when used; one undo restores the previous version; syntax errors are reported
 - [x] **Find in files:** 🔍 in the file explorer or ⌘/Ctrl + Shift + F; results per file with line numbers and the match highlighted; clicking opens the file and selects the match; **Aa** for case-sensitive
