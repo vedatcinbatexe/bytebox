@@ -1,6 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { DiffEditor } from '@monaco-editor/react';
+import { compareFiles, type FileChange } from '@/lib/compare';
+import { editorLanguage } from '@/lib/project';
+import { MONACO_THEME, applyMonacoTheme, useTheme } from '@/lib/theme';
 import {
   fetchVersionFiles,
   fetchVersions,
@@ -11,9 +15,18 @@ import {
 
 interface Props {
   slug: string;
+  // The project as it is now, to compare a version with
+  currentFiles: Record<string, string>;
   onRestored: (project: SavedProject) => void;
   onClose: () => void;
 }
+
+const CHANGE_MARKS: Record<FileChange, { mark: string; className: string; title: string }> = {
+  added: { mark: '+', className: 'text-success', title: 'Added since this version' },
+  deleted: { mark: '−', className: 'text-danger', title: 'Deleted since this version' },
+  changed: { mark: '●', className: 'text-warning', title: 'Changed since this version' },
+  same: { mark: '', className: '', title: 'Unchanged' },
+};
 
 function timeAgo(iso: string): string {
   const date = new Date(iso.endsWith('Z') ? iso : `${iso}Z`);
@@ -24,8 +37,10 @@ function timeAgo(iso: string): string {
   return date.toLocaleString();
 }
 
-// Earlier versions of a project: browse their files read-only and restore one
-export function HistoryPanel({ slug, onRestored, onClose }: Props) {
+// Earlier versions of a project: browse their files read-only, compare them with now, restore one
+export function HistoryPanel({ slug, currentFiles, onRestored, onClose }: Props) {
+  const theme = useTheme();
+  const [compare, setCompare] = useState(false);
   const [versions, setVersions] = useState<VersionSummary[] | null>(null);
   const [selected, setSelected] = useState<VersionSummary | null>(null);
   const [files, setFiles] = useState<Record<string, string> | null>(null);
@@ -53,7 +68,9 @@ export function HistoryPanel({ slug, onRestored, onClose }: Props) {
     try {
       const loaded = await fetchVersionFiles(slug, version.id);
       setFiles(loaded);
-      setOpenFile(Object.keys(loaded).sort()[0] ?? null);
+      // Start on the first file that changed, if any
+      const changes = compareFiles(loaded, currentFiles);
+      setOpenFile((changes.find((file) => file.change !== 'same') ?? changes[0])?.path ?? null);
     } catch (loadError) {
       setError((loadError as Error).message);
     }
@@ -125,22 +142,44 @@ export function HistoryPanel({ slug, onRestored, onClose }: Props) {
             {selected && !files && <p className="p-5 text-sm text-subtle">Loading files…</p>}
             {files && (
               <>
-                <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-line px-2 py-1.5">
-                  {Object.keys(files)
-                    .sort()
-                    .map((path) => (
+                <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-line px-2 py-1.5">
+                  {compareFiles(files, currentFiles)
+                    // Files added since only exist now, so show them only when comparing
+                    .filter((file) => compare || file.change !== 'added')
+                    .map(({ path, change }) => (
                       <button
                         key={path}
                         onClick={() => setOpenFile(path)}
+                        title={CHANGE_MARKS[change].title}
                         className={`shrink-0 rounded px-2 py-0.5 font-mono text-xs ${openFile === path ? 'bg-raised text-fg' : 'text-muted hover:text-fg'}`}
                       >
                         {path}
+                        {CHANGE_MARKS[change].mark && (
+                          <span className={`ml-1 ${CHANGE_MARKS[change].className}`}>{CHANGE_MARKS[change].mark}</span>
+                        )}
                       </button>
                     ))}
+                  <label className="ml-auto flex shrink-0 items-center gap-1.5 pl-3 text-xs text-muted">
+                    <input type="checkbox" checked={compare} onChange={(event) => setCompare(event.target.checked)} />
+                    Compare with now
+                  </label>
                 </div>
-                <pre className="min-h-0 flex-1 overflow-auto bg-app p-4 font-mono text-sm whitespace-pre text-fg">
-                  {openFile ? files[openFile] : ''}
-                </pre>
+                {compare && openFile ? (
+                  <div className="min-h-0 flex-1">
+                    <DiffEditor
+                      original={files[openFile] ?? ''}
+                      modified={currentFiles[openFile] ?? ''}
+                      language={editorLanguage(openFile)}
+                      beforeMount={(monaco) => applyMonacoTheme(monaco, theme)}
+                      theme={MONACO_THEME}
+                      options={{ readOnly: true, renderSideBySide: true, minimap: { enabled: false }, scrollBeyondLastLine: false }}
+                    />
+                  </div>
+                ) : (
+                  <pre className="min-h-0 flex-1 overflow-auto bg-app p-4 font-mono text-sm whitespace-pre text-fg">
+                    {openFile && openFile in files ? files[openFile] : ''}
+                  </pre>
+                )}
               </>
             )}
           </div>
