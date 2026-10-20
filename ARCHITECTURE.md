@@ -419,6 +419,8 @@ subscription {
 - [x] Autosave language, code (per language) and stdin in `localStorage`
 - [x] Responsive: editor and output side by side on desktop, stacked on mobile
 
+**Live preview:** projects with HTML files get **Output | Preview** tabs. The preview inlines the project's linked CSS/JS into one document and shows it in an iframe sandboxed with `allow-scripts` only (no same-origin access to Bytebox), updating as you type; a small console shows `console.log` output and errors. Runs entirely in the browser, so guests can use it.
+
 **Themes:** Dark, Synthwave, Blue, Purple and Light, picked from the header (remembered per browser). Components use color tokens (`bg-panel`, `text-muted`, `bg-accent`, …) defined in `app/globals.css`; each theme sets the same CSS variables, and the editor (Monaco) and terminal (xterm) take their colors from them too.
 
 > The browser calls the gateway directly at `NEXT_PUBLIC_GATEWAY_URL` (default `http://localhost:4000/graphql`). It is set as a Docker build argument because Next.js inlines it at build time.

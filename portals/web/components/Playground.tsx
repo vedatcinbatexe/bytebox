@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { FileTree } from './FileTree';
 import { OutputPanel } from './OutputPanel';
+import { PreviewPanel } from './PreviewPanel';
+import { htmlFiles } from '@/lib/preview';
 import { TerminalPanel } from './TerminalPanel';
 import { CommandsHelp } from './CommandsHelp';
 import { LoginRequiredModal } from './LoginRequiredModal';
@@ -65,6 +67,7 @@ function workspaceFor(saved: SavedProject): Workspace {
   const paths = Object.keys(saved.project.files).sort();
   const first =
     paths.find((path) => /^main\.(py|js|cpp)$/.test(path)) ??
+    paths.find((path) => path === 'index.html') ??
     paths.find((path) => runLanguage(path)) ??
     paths[0] ??
     null;
@@ -109,6 +112,7 @@ export function Playground({ slug }: Props) {
   const [notice, setNotice] = useState<{ text: string; isError: boolean } | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [asideTab, setAsideTab] = useState<'output' | 'preview'>('output');
   const [selectedFolder, setSelectedFolder] = useState('');
   const [run, setRun] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -403,6 +407,11 @@ export function Playground({ slug }: Props) {
   };
 
   const canRun = activePath !== null && runLanguage(activePath) !== null;
+  // HTML files are shown in the live preview instead of being run on the server
+  const pages = htmlFiles(project.files);
+  const isHtmlOpen = activePath?.toLowerCase().endsWith('.html') ?? false;
+  const previewPath = isHtmlOpen ? activePath! : pages[0];
+  const showPreview = asideTab === 'preview' && previewPath !== undefined;
 
   if (notFound) {
     return (
@@ -489,14 +498,27 @@ export function Playground({ slug }: Props) {
           >
             ? Commands
           </button>
-          <button
-            onClick={runActiveFile}
-            disabled={running || !canRun}
-            title={canRun ? 'Run the open file (⌘/Ctrl + Enter)' : 'Open a .py, .js or .cpp file'}
-            className="max-w-[50vw] truncate rounded bg-accent px-3.5 py-1.5 text-sm font-semibold text-accent-fg hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {running ? 'Running…' : `▶ Run ${canRun ? activePath : ''}`}
-          </button>
+          {isHtmlOpen ? (
+            <button
+              onClick={() => setAsideTab('preview')}
+              title="Show the live preview of this page"
+              className="max-w-[50vw] truncate rounded bg-accent px-3.5 py-1.5 text-sm font-semibold text-accent-fg hover:bg-accent-hover"
+            >
+              👁 Preview {activePath}
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setAsideTab('output');
+                void runActiveFile();
+              }}
+              disabled={running || !canRun}
+              title={canRun ? 'Run the open file (⌘/Ctrl + Enter)' : 'Open a .py, .js, .cpp or .html file'}
+              className="max-w-[50vw] truncate rounded bg-accent px-3.5 py-1.5 text-sm font-semibold text-accent-fg hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {running ? 'Running…' : `▶ Run ${canRun ? activePath : ''}`}
+            </button>
+          )}
         </div>
         <span className="hidden h-6 w-px bg-line md:block" aria-hidden="true" />
 
@@ -631,22 +653,45 @@ export function Playground({ slug }: Props) {
 
         {/* Stdin + output */}
         <aside className="flex min-h-80 shrink-0 flex-col bg-panel md:min-h-0 md:w-[35%] md:shrink">
-          <section className="border-b border-line">
-            <h2 className="px-4 pt-2 text-xs font-semibold tracking-wide text-muted uppercase">
-              Input (stdin)
-            </h2>
-            <textarea
-              value={stdin}
-              onChange={(event) => update({ stdin: event.target.value })}
-              readOnly={!user}
-              onClick={() => canChange()}
-              rows={4}
-              spellCheck={false}
-              className="w-full resize-none bg-transparent px-4 py-2 font-mono text-sm outline-none"
-              placeholder="Input for your program"
-            />
-          </section>
-          <OutputPanel run={run} error={error} />
+          {pages.length > 0 && (
+            <div role="tablist" className="flex shrink-0 border-b border-line text-sm">
+              {(['output', 'preview'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  role="tab"
+                  aria-selected={asideTab === tab}
+                  onClick={() => setAsideTab(tab)}
+                  className={`border-b-2 px-4 py-2 ${
+                    asideTab === tab ? 'border-accent text-fg' : 'border-transparent text-muted hover:text-fg'
+                  }`}
+                >
+                  {tab === 'output' ? 'Output' : '👁 Preview'}
+                </button>
+              ))}
+            </div>
+          )}
+          {showPreview ? (
+            <PreviewPanel files={project.files} htmlPath={previewPath!} />
+          ) : (
+            <>
+              <section className="border-b border-line">
+                <h2 className="px-4 pt-2 text-xs font-semibold tracking-wide text-muted uppercase">
+                  Input (stdin)
+                </h2>
+                <textarea
+                  value={stdin}
+                  onChange={(event) => update({ stdin: event.target.value })}
+                  readOnly={!user}
+                  onClick={() => canChange()}
+                  rows={4}
+                  spellCheck={false}
+                  className="w-full resize-none bg-transparent px-4 py-2 font-mono text-sm outline-none"
+                  placeholder="Input for your program"
+                />
+              </section>
+              <OutputPanel run={run} error={error} />
+            </>
+          )}
         </aside>
       </main>
     </div>

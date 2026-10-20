@@ -233,3 +233,58 @@ for target in (17, 6):
     },
   },
 ];
+
+WORKSPACE_TEMPLATES.push({
+  id: 'web-page',
+  name: 'Web page',
+  description: 'HTML, CSS and JavaScript with a live preview.',
+  icon: '🌐',
+  files: {
+    'index.html': `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>My page</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Hello from Bytebox 👋</h1>
+      <p>Edit index.html, style.css or script.js and watch the preview update.</p>
+      <button id="counter">Clicked 0 times</button>
+    </main>
+    <script src="script.js"></script>
+  </body>
+</html>
+`,
+    'style.css': `body {
+  font-family: system-ui, sans-serif;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  margin: 0;
+  background: linear-gradient(135deg, #1e1b4b, #0f766e);
+  color: white;
+}
+
+button {
+  font-size: 1.1rem;
+  padding: 0.6rem 1.2rem;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+`,
+    'script.js': `const button = document.getElementById('counter');
+let clicks = 0;
+
+button.addEventListener('click', () => {
+  clicks += 1;
+  button.textContent = \`Clicked \${clicks} time\${clicks === 1 ? '' : 's'}\`;
+  console.log('Button clicked', clicks);
+});
+
+console.log('Page loaded');
+`,
+  },
+});
