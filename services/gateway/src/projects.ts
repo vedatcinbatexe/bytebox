@@ -95,6 +95,11 @@ export async function explore(sort: 'newest' | 'stars' = 'newest', tag?: string)
   return (await call<ProjectSummary[]>('GET', `/explore?limit=60&sort=${sort}${tagQuery}`)) ?? [];
 }
 
+export async function projectStats(): Promise<{ projects: number; publicProjects: number; stars: number }> {
+  const stats = await call<{ projects: number; publicProjects: number; stars: number }>('GET', '/stats');
+  return stats ?? { projects: 0, publicProjects: 0, stars: 0 };
+}
+
 export async function popularTags(): Promise<{ tag: string; count: number }[]> {
   return (await call<{ tag: string; count: number }[]>('GET', '/tags')) ?? [];
 }

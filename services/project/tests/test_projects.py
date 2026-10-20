@@ -265,3 +265,11 @@ def test_tags_are_checked(client):
     assert client.patch(f"/projects/{slug}", json={"tags": [f"t{n}" for n in range(6)]}, headers=ALICE).status_code == 422
     assert client.patch(f"/projects/{slug}", json={"tags": ["game"]}, headers=BOB).status_code == 403
     assert client.patch(f"/projects/{slug}", json={"tags": []}, headers=ALICE).json()["tags"] == []
+
+
+def test_stats_count_projects_and_stars(client):
+    public = create(client)["slug"]
+    create(client)
+    client.patch(f"/projects/{public}", json={"visibility": "public"}, headers=ALICE)
+    client.put(f"/projects/{public}/star", headers=BOB)
+    assert client.get("/stats").json() == {"projects": 2, "publicProjects": 1, "stars": 1}

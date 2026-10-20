@@ -66,6 +66,9 @@ app.MapGet("/auth/{provider}/callback", async (
     return Results.Redirect(webUrl + returnTo);
 });
 
+// How many accounts there are, for the public stats page
+app.MapGet("/stats", async (IdentityDb db) => Results.Ok(new { Users = await db.Users.CountAsync() }));
+
 // Public profile info (nothing private: no emails or provider ids)
 app.MapGet("/users/{login}", async (IdentityDb db, string login) =>
 {

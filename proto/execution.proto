@@ -16,6 +16,35 @@ service ExecutionService {
 
   // A user's most recent runs, newest first
   rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
+
+  // Numbers about all runs, for the public stats page
+  rpc GetStats(GetStatsRequest) returns (RunStats);
+}
+
+message GetStatsRequest {}
+
+message RunStats {
+  int32 total_runs = 1;
+  int32 runs_last_24h = 2;
+  repeated LanguageStats languages = 3; // most used first
+  repeated StatusCount statuses = 4;
+  repeated DayCount last_7_days = 5; // oldest first, days without runs included
+}
+
+message LanguageStats {
+  string language = 1;
+  int32 runs = 2;
+  int32 average_time_ms = 3; // finished runs only
+}
+
+message StatusCount {
+  string status = 1;
+  int32 runs = 2;
+}
+
+message DayCount {
+  string day = 1; // YYYY-MM-DD (UTC)
+  int32 runs = 2;
 }
 
 message ListRunsRequest {
