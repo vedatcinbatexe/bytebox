@@ -20,6 +20,19 @@ export interface ProjectFile {
 
 const RUN_FIELDS = 'id entryFile status exitCode stdout stderr truncated timeMs';
 
+export interface RunSummary extends Run {
+  language: string;
+  createdAt: string;
+}
+
+export async function fetchMyRuns(limit = 50): Promise<RunSummary[]> {
+  const data = await request<{ myRuns: RunSummary[] }>(
+    `query MyRuns($limit: Int) { myRuns(limit: $limit) { ${RUN_FIELDS} language createdAt } }`,
+    { limit },
+  );
+  return data.myRuns;
+}
+
 export async function createRun(
   files: ProjectFile[],
   entryFile: string,

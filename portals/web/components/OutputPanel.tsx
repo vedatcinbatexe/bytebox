@@ -1,6 +1,6 @@
 import type { Run, RunStatus } from '@/lib/runs';
 
-const STATUS: Record<RunStatus, { label: string; className: string }> = {
+export const STATUS: Record<RunStatus, { label: string; className: string }> = {
   QUEUED: { label: 'Running…', className: 'bg-info/15 text-info' },
   COMPLETED: { label: 'Completed', className: 'bg-success/15 text-success' },
   TIMED_OUT: { label: 'Time limit exceeded', className: 'bg-warning/15 text-warning' },

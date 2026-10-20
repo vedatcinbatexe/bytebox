@@ -92,6 +92,23 @@ public class ExecutionGrpcService(ExecutionDb db, RunQueue queue, IConnectionMul
         }
     }
 
+    public override async Task<ListRunsResponse> ListRuns(ListRunsRequest request, ServerCallContext context)
+    {
+        if (string.IsNullOrEmpty(request.UserId))
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "user_id is required"));
+        var limit = request.Limit is > 0 and <= 100 ? request.Limit : 20;
+
+        var runs = await db.Runs.AsNoTracking()
+            .Where(r => r.UserId == request.UserId)
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(limit)
+            .ToListAsync(context.CancellationToken);
+
+        var response = new ListRunsResponse();
+        response.Runs.AddRange(runs.Select(ToMessage));
+        return response;
+    }
+
     private async Task<Run> FindRunAsync(Guid id, CancellationToken cancellationToken)
     {
         return await db.Runs.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id, cancellationToken)
