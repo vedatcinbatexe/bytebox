@@ -24,6 +24,9 @@ const EDITOR_LANGUAGES: Record<string, string> = {
   '.hpp': 'cpp',
   '.json': 'json',
   '.md': 'markdown',
+  '.html': 'html',
+  '.css': 'css',
+  '.ts': 'typescript',
 };
 
 function extension(path: string): string {
@@ -41,6 +44,7 @@ export function runLanguage(path: string): string | null {
 export function editorLanguage(path: string): string {
   return EDITOR_LANGUAGES[extension(path)] ?? 'plaintext';
 }
+
 
 export function joinPath(folder: string, name: string): string {
   return folder ? `${folder}/${name}` : name;

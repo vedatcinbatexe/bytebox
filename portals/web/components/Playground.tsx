@@ -10,6 +10,7 @@ import { PreviewPanel } from './PreviewPanel';
 import { SearchPanel } from './SearchPanel';
 import { htmlFiles } from '@/lib/preview';
 import { downloadZip } from '@/lib/zip';
+import { canFormat, formatCode } from '@/lib/format';
 import { TerminalPanel } from './TerminalPanel';
 import { CommandsHelp } from './CommandsHelp';
 import { LoginRequiredModal } from './LoginRequiredModal';
@@ -257,6 +258,27 @@ export function Playground({ slug }: Props) {
     setWorkspace((current) => ({ ...current, ...changes }));
   }
 
+  // ---------- Formatting ----------
+
+  async function formatActiveFile() {
+    const editor = editorRef.current;
+    const model = editor?.getModel();
+    if (!editor || !model || !activePath || !canFormat(activePath) || !canChange()) return;
+    try {
+      const formatted = await formatCode(activePath, model.getValue());
+      if (formatted === model.getValue()) return showNotice('Already formatted');
+      // One edit for the whole file, so a single undo brings the old version back
+      editor.pushUndoStop();
+      editor.executeEdits('format', [{ range: model.getFullModelRange(), text: formatted }]);
+      editor.pushUndoStop();
+      showNotice('Formatted');
+    } catch (formatError) {
+      showNotice((formatError as Error).message, true);
+    }
+  }
+  const formatRef = useRef(formatActiveFile);
+  formatRef.current = formatActiveFile;
+
   // ---------- Find in files ----------
 
   function revealPending() {
@@ -452,6 +474,7 @@ export function Playground({ slug }: Props) {
     // The editor is read-only when signed out; typing asks the visitor to log in
     editor.onDidAttemptReadOnlyEdit(() => canChangeRef.current());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, () => setSearchOpen(true));
+    editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => void formatRef.current());
   };
 
   const canRun = activePath !== null && runLanguage(activePath) !== null;
@@ -661,26 +684,40 @@ export function Playground({ slug }: Props) {
 
         {/* Tabs + editor */}
         <div className="flex min-w-0 shrink-0 flex-col border-line md:min-h-0 md:flex-1 md:shrink md:border-r">
-          <div className="flex shrink-0 overflow-x-auto border-b border-line bg-panel text-sm">
-            {openTabs.map((tab) => (
-              <div
-                key={tab}
-                className={`flex shrink-0 items-center gap-2 border-t-2 border-r border-r-line px-3 py-1.5 ${
-                  tab === activePath ? 'border-t-accent bg-app text-fg' : 'border-t-transparent text-muted hover:text-fg'
-                }`}
-              >
-                <button onClick={() => openFile(tab)} title={tab}>
-                  {tab.split('/').pop()}
-                </button>
-                <button
-                  onClick={() => closeTab(tab)}
-                  title="Close"
-                  className="text-subtle hover:text-fg"
+          <div className="flex shrink-0 border-b border-line bg-panel text-sm">
+            <div className="flex min-w-0 flex-1 overflow-x-auto">
+              {openTabs.map((tab) => (
+                <div
+                  key={tab}
+                  className={`flex shrink-0 items-center gap-2 border-t-2 border-r border-r-line px-3 py-1.5 ${
+                    tab === activePath ? 'border-t-accent bg-app text-fg' : 'border-t-transparent text-muted hover:text-fg'
+                  }`}
                 >
-                  ×
-                </button>
-              </div>
-            ))}
+                  <button onClick={() => openFile(tab)} title={tab}>
+                    {tab.split('/').pop()}
+                  </button>
+                  <button
+                    onClick={() => closeTab(tab)}
+                    title="Close"
+                    className="text-subtle hover:text-fg"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={formatActiveFile}
+              disabled={!activePath || !canFormat(activePath)}
+              title={
+                activePath && canFormat(activePath)
+                  ? 'Format this file with Prettier (Shift + Alt + F)'
+                  : 'Formatting works for JavaScript, TypeScript, JSON, CSS, HTML and Markdown'
+              }
+              className="shrink-0 border-l border-line px-3 text-xs text-muted hover:bg-raised hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              ✨ Format
+            </button>
           </div>
           <div className="h-[50vh] md:h-auto md:min-h-0 md:flex-1">
             {activePath && activePath in project.files ? (
