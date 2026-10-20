@@ -1,1 +1,132 @@
 @import 'tailwindcss';
+
+/*
+ * Colors come from the active theme (data-theme on <html>).
+ * Components only use these names (bg-panel, text-muted, bg-accent, …), never raw colors.
+ * The editor and terminal read the same variables (lib/theme.ts). Use 6-digit hex values.
+ */
+@theme inline {
+  --color-app: var(--app); /* page background, editor */
+  --color-panel: var(--panel); /* header, sidebars, dialogs */
+  --color-raised: var(--raised); /* inputs, hover, active tab */
+  --color-line: var(--line); /* borders */
+  --color-line-strong: var(--line-strong); /* button borders */
+  --color-fg: var(--fg); /* main text */
+  --color-muted: var(--muted); /* secondary text */
+  --color-subtle: var(--subtle); /* hints */
+  --color-accent: var(--accent); /* primary buttons */
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg); /* text on accent */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+}
+
+:root,
+[data-theme='dark'] {
+  color-scheme: dark;
+  --app: #09090b;
+  --panel: #111114;
+  --raised: #1c1c21;
+  --line: #27272a;
+  --line-strong: #3f3f46;
+  --fg: #f4f4f5;
+  --muted: #a1a1aa;
+  --subtle: #71717a;
+  --accent: #059669;
+  --accent-hover: #10b981;
+  --accent-fg: #ffffff;
+  --success: #6ee7b7;
+  --warning: #fcd34d;
+  --danger: #fca5a5;
+  --info: #7dd3fc;
+}
+
+[data-theme='synthwave'] {
+  color-scheme: dark;
+  --app: #1a1033;
+  --panel: #221445;
+  --raised: #2e1b5b;
+  --line: #3d2670;
+  --line-strong: #5a3a99;
+  --fg: #fbeaff;
+  --muted: #cfaef0;
+  --subtle: #9878c4;
+  --accent: #ff2e97;
+  --accent-hover: #ff5cae;
+  --accent-fg: #ffffff;
+  --success: #36f9f6;
+  --warning: #fede5d;
+  --danger: #ff6b8b;
+  --info: #72f1b8;
+}
+
+[data-theme='blue'] {
+  color-scheme: dark;
+  --app: #0a1222;
+  --panel: #0f1a30;
+  --raised: #16243f;
+  --line: #1f3256;
+  --line-strong: #2e4775;
+  --fg: #e8f0ff;
+  --muted: #a3b7dc;
+  --subtle: #6d84ae;
+  --accent: #2f7bf5;
+  --accent-hover: #5b9bff;
+  --accent-fg: #ffffff;
+  --success: #6ee7b7;
+  --warning: #fcd34d;
+  --danger: #fca5a5;
+  --info: #7dd3fc;
+}
+
+[data-theme='purple'] {
+  color-scheme: dark;
+  --app: #110b1d;
+  --panel: #18102b;
+  --raised: #23173c;
+  --line: #322253;
+  --line-strong: #4a3478;
+  --fg: #f3ecff;
+  --muted: #bca9e3;
+  --subtle: #8672b0;
+  --accent: #8b5cf6;
+  --accent-hover: #a78bfa;
+  --accent-fg: #ffffff;
+  --success: #86efac;
+  --warning: #fcd34d;
+  --danger: #fca5a5;
+  --info: #c4b5fd;
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+  --app: #ffffff;
+  --panel: #f6f7f9;
+  --raised: #eceef2;
+  --line: #e2e5ea;
+  --line-strong: #c9ced6;
+  --fg: #111827;
+  --muted: #4b5563;
+  --subtle: #8a93a2;
+  --accent: #059669;
+  --accent-hover: #047857;
+  --accent-fg: #ffffff;
+  --success: #047857;
+  --warning: #b45309;
+  --danger: #dc2626;
+  --info: #0369a1;
+}
+
+/* A little extra flair for Synthwave: a soft sunset glow behind everything */
+[data-theme='synthwave'] body {
+  background-image: radial-gradient(ellipse at top, #3b1466 0%, transparent 60%);
+}
+[data-theme='synthwave'] .bg-accent {
+  box-shadow: 0 0 12px #ff2e9766;
+}
+
+* {
+  scrollbar-color: var(--line-strong) transparent;
+}

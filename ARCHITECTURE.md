@@ -419,6 +419,8 @@ subscription {
 - [x] Autosave language, code (per language) and stdin in `localStorage`
 - [x] Responsive: editor and output side by side on desktop, stacked on mobile
 
+**Themes:** Dark, Synthwave, Blue, Purple and Light, picked from the header (remembered per browser). Components use color tokens (`bg-panel`, `text-muted`, `bg-accent`, …) defined in `app/globals.css`; each theme sets the same CSS variables, and the editor (Monaco) and terminal (xterm) take their colors from them too.
+
 > The browser calls the gateway directly at `NEXT_PUBLIC_GATEWAY_URL` (default `http://localhost:4000/graphql`). It is set as a Docker build argument because Next.js inlines it at build time.
 
 ### Step 5 — Multi-File Projects (files & folders)
@@ -517,6 +519,7 @@ flowchart LR
 | Async | RabbitMQ | Simple, reliable work queue; Kafka not needed at this scale |
 | Data | PostgreSQL (users, runs), MongoDB (projects), Redis (pub-sub, rate limits, sessions) | Right store per data shape; each service owns its data |
 | Isolation | Docker per run → gVisor later | Simple start, clear upgrade path |
+| UI themes | CSS variables + Tailwind tokens, `data-theme` on `<html>` | One place per theme; no hard-coded colors in components; editor and terminal follow automatically |
 | Auth | GitHub / Google OAuth + JWT in an httpOnly cookie, verified by gateway and terminal | No passwords to store; one cookie works for GraphQL and WebSocket on the same site |
 | Who can run code | Signed-in users only (checked in the backend) | Running code costs resources and needs abuse limits per account |
 | Multi-file runs | Whole project sent with each run, entry = open file | Runs stay stateless and one-off; same runner design as single files |

@@ -35,7 +35,7 @@ export function FileTree(props: Props) {
         <li key={node.path}>
           <div
             className={`group flex cursor-pointer items-center gap-1 py-1 pr-2 text-sm ${
-              isActive ? 'bg-zinc-800 text-white' : 'text-zinc-300 hover:bg-zinc-900'
+              isActive ? 'bg-raised text-fg' : 'text-fg hover:bg-raised'
             }`}
             style={{ paddingLeft: 8 + depth * 14 }}
             onClick={() => {
@@ -47,7 +47,7 @@ export function FileTree(props: Props) {
               }
             }}
           >
-            <span className="w-4 shrink-0 text-xs text-zinc-500">
+            <span className="w-4 shrink-0 text-xs text-subtle">
               {isFolder ? (isOpen ? '▾' : '▸') : ''}
             </span>
             <span className="shrink-0">{isFolder ? '📁' : '📄'}</span>
@@ -55,7 +55,7 @@ export function FileTree(props: Props) {
             <span className="ml-auto hidden shrink-0 gap-1 group-hover:flex">
               <button
                 title="Rename"
-                className="rounded px-1 text-zinc-400 hover:bg-zinc-700 hover:text-white"
+                className="rounded px-1 text-muted hover:bg-line hover:text-fg"
                 onClick={(event) => {
                   event.stopPropagation();
                   props.onRename(node.path);
@@ -65,7 +65,7 @@ export function FileTree(props: Props) {
               </button>
               <button
                 title="Delete"
-                className="rounded px-1 text-zinc-400 hover:bg-zinc-700 hover:text-red-300"
+                className="rounded px-1 text-muted hover:bg-line hover:text-danger"
                 onClick={(event) => {
                   event.stopPropagation();
                   props.onDelete(node.path);

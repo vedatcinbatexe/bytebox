@@ -11,6 +11,8 @@ import { CommandsHelp } from './CommandsHelp';
 import { LoginRequiredModal } from './LoginRequiredModal';
 import { UserMenu } from './UserMenu';
 import { useMe } from '@/lib/auth';
+import { ThemePicker } from './ThemePicker';
+import { MONACO_THEME, applyMonacoTheme, useTheme } from '@/lib/theme';
 import { createRun, watchRun, type Run } from '@/lib/runs';
 import {
   MAX_FILES,
@@ -35,7 +37,7 @@ import { createProject, fetchProject, updateProject, type SavedProject } from '@
 const STORAGE_KEY = 'bytebox:workspace';
 
 const SECONDARY_BUTTON =
-  'rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50';
+  'rounded border border-line-strong px-2.5 py-1.5 text-sm text-fg hover:bg-raised disabled:cursor-not-allowed disabled:opacity-50';
 
 const ERROR_MESSAGES: Record<string, string> = {
   RATE_LIMITED: 'Too many runs. Please wait a minute and try again.',
@@ -114,6 +116,13 @@ export function Playground({ slug }: Props) {
   const [running, setRunning] = useState(false);
   const closeSubscription = useRef<(() => void) | null>(null);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
+  const theme = useTheme();
+
+  // Recolor the editor when the theme changes
+  useEffect(() => {
+    if (monacoRef.current) applyMonacoTheme(monacoRef.current, theme);
+  }, [theme]);
 
   const { title, project, openTabs, activePath, stdin } = workspace;
   const hasUnsavedChanges = Boolean(slug) && loaded && snapshot(workspace) !== savedSnapshot;
@@ -387,6 +396,8 @@ export function Playground({ slug }: Props) {
   canChangeRef.current = canChange;
   const onEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
+    applyMonacoTheme(monaco, theme);
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => runRef.current());
     // The editor is read-only when signed out; typing asks the visitor to log in
     editor.onDidAttemptReadOnlyEdit(() => canChangeRef.current());
@@ -398,8 +409,8 @@ export function Playground({ slug }: Props) {
     return (
       <div className="flex h-dvh flex-col items-center justify-center gap-4 p-8 text-center">
         <h1 className="text-2xl font-bold">Project not found</h1>
-        <p className="text-zinc-400">This link doesn&apos;t point to a Bytebox project.</p>
-        <Link href="/" className="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">
+        <p className="text-muted">This link doesn&apos;t point to a Bytebox project.</p>
+        <Link href="/" className="rounded bg-accent px-4 py-2 text-sm font-semibold text-accent-fg">
           Go to your workspace
         </Link>
       </div>
@@ -408,7 +419,7 @@ export function Playground({ slug }: Props) {
 
   if (!loaded) {
     return (
-      <div className="flex h-dvh items-center justify-center text-zinc-500">
+      <div className="flex h-dvh items-center justify-center text-subtle">
         {notice?.isError ? notice.text : 'Loading project…'}
       </div>
     );
@@ -416,8 +427,8 @@ export function Playground({ slug }: Props) {
 
   return (
     <div className="flex h-dvh flex-col">
-      <header className="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-3">
-        <Link href="/" className="text-lg font-bold" title="Your local workspace">
+      <header className="flex flex-wrap items-center gap-2 border-b border-line bg-panel px-3 py-2">
+        <Link href="/" className="mr-1 text-lg font-bold whitespace-nowrap" title="Your local workspace">
           📦 Bytebox
         </Link>
         <input
@@ -427,74 +438,78 @@ export function Playground({ slug }: Props) {
           onClick={() => canChange()}
           maxLength={100}
           aria-label="Project title"
-          className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-2 py-1 text-sm text-zinc-200 outline-none hover:border-zinc-800 focus:border-zinc-700"
+          className="min-w-32 flex-1 rounded border border-transparent bg-transparent px-2 py-1 text-sm text-fg outline-none hover:border-line focus:border-line-strong"
         />
         {notice && (
-          <span className={`text-xs ${notice.isError ? 'text-red-300' : 'text-emerald-300'}`}>
-            {notice.text}
-          </span>
+          <span className={`text-xs ${notice.isError ? 'text-danger' : 'text-success'}`}>{notice.text}</span>
         )}
-        {!slug && (
-          <button onClick={share} disabled={busy} className={SECONDARY_BUTTON}>
-            {busy ? 'Sharing…' : 'Share'}
-          </button>
-        )}
-        {slug && isOwner && (
+
+        {/* Project: share / save / copy link / fork */}
+        <div className="flex items-center gap-2">
+          {!slug && (
+            <button onClick={share} disabled={busy} className={SECONDARY_BUTTON} title="Save and get a link">
+              {busy ? 'Sharing…' : '↗ Share'}
+            </button>
+          )}
+          {slug && isOwner && (
+            <button onClick={saveChanges} disabled={busy || !hasUnsavedChanges} className={SECONDARY_BUTTON}>
+              {busy ? 'Saving…' : hasUnsavedChanges ? '● Save' : '✓ Saved'}
+            </button>
+          )}
+          {slug && (
+            <>
+              <button
+                onClick={async () =>
+                  showNotice((await copyLink(window.location.href)) ? 'Link copied' : 'Copy the URL from the address bar')
+                }
+                className={SECONDARY_BUTTON}
+              >
+                ⧉ Copy link
+              </button>
+              <button onClick={fork} disabled={busy} title="Make your own copy of this project" className={SECONDARY_BUTTON}>
+                ⑂ Fork
+              </button>
+            </>
+          )}
+        </div>
+        <span className="hidden h-6 w-px bg-line md:block" aria-hidden="true" />
+
+        {/* Tools */}
+        <div className="flex items-center gap-2">
           <button
-            onClick={saveChanges}
-            disabled={busy || !hasUnsavedChanges}
-            className={SECONDARY_BUTTON}
+            onClick={() => (terminalOpen ? setTerminalOpen(false) : canChange() && setTerminalOpen(true))}
+            className={`${SECONDARY_BUTTON} ${terminalOpen ? 'bg-raised' : ''}`}
+            title="Open a shell with your project files"
           >
-            {busy ? 'Saving…' : hasUnsavedChanges ? 'Save' : 'Saved'}
+            {terminalOpen ? 'Hide terminal' : '>_ Terminal'}
           </button>
-        )}
-        {slug && (
-          <>
-            <button
-              onClick={async () =>
-                showNotice((await copyLink(window.location.href)) ? 'Link copied' : 'Copy the URL from the address bar')
-              }
-              className={SECONDARY_BUTTON}
-            >
-              Copy link
-            </button>
-            <button
-              onClick={fork}
-              disabled={busy}
-              title="Make your own copy of this project"
-              className={SECONDARY_BUTTON}
-            >
-              Fork
-            </button>
-          </>
-        )}
-        <button
-          onClick={() => (terminalOpen ? setTerminalOpen(false) : canChange() && setTerminalOpen(true))}
-          className={SECONDARY_BUTTON}
-          title="Open a shell with your project files"
-        >
-          {terminalOpen ? 'Hide terminal' : '>_ Terminal'}
-        </button>
-        <button
-          onClick={() => setHelpOpen(true)}
-          className={SECONDARY_BUTTON}
-          title="Which commands can I use in the terminal?"
-        >
-          ? Commands
-        </button>
-        <button
-          onClick={runActiveFile}
-          disabled={running || !canRun}
-          title={canRun ? 'Run the open file (⌘/Ctrl + Enter)' : 'Open a .py, .js or .cpp file'}
-          className="max-w-[60vw] truncate rounded bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {running ? 'Running…' : `▶ Run ${canRun ? activePath : ''}`}
-        </button>
-        <UserMenu user={user} loading={userLoading} />
+          <button
+            onClick={() => setHelpOpen(true)}
+            className={SECONDARY_BUTTON}
+            title="Which commands can I use in the terminal?"
+          >
+            ? Commands
+          </button>
+          <button
+            onClick={runActiveFile}
+            disabled={running || !canRun}
+            title={canRun ? 'Run the open file (⌘/Ctrl + Enter)' : 'Open a .py, .js or .cpp file'}
+            className="max-w-[50vw] truncate rounded bg-accent px-3.5 py-1.5 text-sm font-semibold text-accent-fg hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {running ? 'Running…' : `▶ Run ${canRun ? activePath : ''}`}
+          </button>
+        </div>
+        <span className="hidden h-6 w-px bg-line md:block" aria-hidden="true" />
+
+        {/* Theme and profile */}
+        <div className="flex items-center gap-2">
+          <ThemePicker />
+          <UserMenu user={user} loading={userLoading} />
+        </div>
       </header>
 
       {!userLoading && !user && (
-        <p className="border-b border-zinc-800 bg-amber-500/10 px-4 py-1.5 text-xs text-amber-200">
+        <p className="border-b border-line bg-warning/10 px-4 py-1.5 text-xs text-warning">
           You&apos;re browsing as a guest.{' '}
           <button onClick={() => setLoginPromptOpen(true)} className="underline">
             Log in or sign up
@@ -503,7 +518,7 @@ export function Playground({ slug }: Props) {
         </p>
       )}
       {user && slug && !isOwner && (
-        <p className="border-b border-zinc-800 bg-sky-500/10 px-4 py-1.5 text-xs text-sky-200">
+        <p className="border-b border-line bg-info/10 px-4 py-1.5 text-xs text-info">
           You&apos;re viewing someone else&apos;s project. You can edit and run it, but to save changes,{' '}
           <button onClick={fork} className="underline">
             fork it
@@ -517,22 +532,22 @@ export function Playground({ slug }: Props) {
 
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         {/* File explorer */}
-        <nav className="flex max-h-48 shrink-0 flex-col border-b border-zinc-800 md:max-h-none md:w-56 md:border-r md:border-b-0">
-          <div className="flex items-center gap-1 border-b border-zinc-800 px-3 py-2">
-            <h2 className="mr-auto text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+        <nav className="flex max-h-48 shrink-0 flex-col border-b border-line bg-panel md:max-h-none md:w-56 md:border-r md:border-b-0">
+          <div className="flex items-center gap-1 border-b border-line px-3 py-2">
+            <h2 className="mr-auto text-xs font-semibold tracking-wide text-muted uppercase">
               Files
             </h2>
             <button
               onClick={newFile}
               title="New file"
-              className="rounded px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-zinc-800"
+              className="rounded px-1.5 py-0.5 text-xs text-fg hover:bg-raised"
             >
               + File
             </button>
             <button
               onClick={newFolder}
               title="New folder"
-              className="rounded px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-zinc-800"
+              className="rounded px-1.5 py-0.5 text-xs text-fg hover:bg-raised"
             >
               + Folder
             </button>
@@ -557,13 +572,13 @@ export function Playground({ slug }: Props) {
         </nav>
 
         {/* Tabs + editor */}
-        <div className="flex min-w-0 shrink-0 flex-col border-zinc-800 md:min-h-0 md:flex-1 md:shrink md:border-r">
-          <div className="flex shrink-0 overflow-x-auto border-b border-zinc-800 text-sm">
+        <div className="flex min-w-0 shrink-0 flex-col border-line md:min-h-0 md:flex-1 md:shrink md:border-r">
+          <div className="flex shrink-0 overflow-x-auto border-b border-line bg-panel text-sm">
             {openTabs.map((tab) => (
               <div
                 key={tab}
-                className={`flex shrink-0 items-center gap-2 border-r border-zinc-800 px-3 py-1.5 ${
-                  tab === activePath ? 'bg-zinc-900 text-white' : 'text-zinc-400 hover:text-zinc-200'
+                className={`flex shrink-0 items-center gap-2 border-t-2 border-r border-r-line px-3 py-1.5 ${
+                  tab === activePath ? 'border-t-accent bg-app text-fg' : 'border-t-transparent text-muted hover:text-fg'
                 }`}
               >
                 <button onClick={() => openFile(tab)} title={tab}>
@@ -572,7 +587,7 @@ export function Playground({ slug }: Props) {
                 <button
                   onClick={() => closeTab(tab)}
                   title="Close"
-                  className="text-zinc-500 hover:text-white"
+                  className="text-subtle hover:text-fg"
                 >
                   ×
                 </button>
@@ -592,7 +607,8 @@ export function Playground({ slug }: Props) {
                   }))
                 }
                 onMount={onEditorMount}
-                theme="vs-dark"
+                beforeMount={(monaco) => applyMonacoTheme(monaco, theme)}
+                theme={MONACO_THEME}
                 options={{
                   fontSize: 14,
                   minimap: { enabled: false },
@@ -602,7 +618,7 @@ export function Playground({ slug }: Props) {
                 }}
               />
             ) : (
-              <p className="p-6 text-sm text-zinc-500">Open a file from the explorer, or create one.</p>
+              <p className="p-6 text-sm text-subtle">Open a file from the explorer, or create one.</p>
             )}
           </div>
           {terminalOpen && (
@@ -615,9 +631,9 @@ export function Playground({ slug }: Props) {
         </div>
 
         {/* Stdin + output */}
-        <aside className="flex min-h-80 shrink-0 flex-col md:min-h-0 md:w-[35%] md:shrink">
-          <section className="border-b border-zinc-800">
-            <h2 className="px-4 pt-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+        <aside className="flex min-h-80 shrink-0 flex-col bg-panel md:min-h-0 md:w-[35%] md:shrink">
+          <section className="border-b border-line">
+            <h2 className="px-4 pt-2 text-xs font-semibold tracking-wide text-muted uppercase">
               Input (stdin)
             </h2>
             <textarea

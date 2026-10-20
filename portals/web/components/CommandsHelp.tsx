@@ -101,25 +101,25 @@ export function CommandsHelp({ onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="commands-title"
-        className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-lg border border-zinc-800 bg-zinc-950 shadow-xl"
+        className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-lg border border-line bg-panel shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center gap-3 border-b border-zinc-800 px-5 py-3">
+        <div className="flex items-center gap-3 border-b border-line px-5 py-3">
           <h2 id="commands-title" className="mr-auto text-lg font-semibold">
             Terminal commands
           </h2>
           <button
             onClick={onClose}
             title="Close (Esc)"
-            className="rounded px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+            className="rounded px-2 py-1 text-muted hover:bg-raised hover:text-fg"
           >
             ✕
           </button>
         </div>
 
         <div className="overflow-y-auto px-5 py-4">
-          <p className="mb-4 text-sm text-zinc-400">
-            Open the terminal with <span className="text-zinc-200">&gt;_ Terminal</span>. You start in
+          <p className="mb-4 text-sm text-muted">
+            Open the terminal with <span className="text-fg">&gt;_ Terminal</span>. You start in
             your project folder, and files you create, change or delete there show up in the file tree
             automatically.
           </p>
@@ -127,18 +127,18 @@ export function CommandsHelp({ onClose }: Props) {
           <div className="grid gap-6 md:grid-cols-2">
             {SECTIONS.map((section) => (
               <section key={section.title}>
-                <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+                <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">
                   {section.title}
                 </h3>
                 <dl className="space-y-2">
                   {section.commands.map((item) => (
                     <div key={item.command}>
                       <dt>
-                        <code className="rounded bg-zinc-900 px-1.5 py-0.5 font-mono text-sm text-emerald-300">
+                        <code className="rounded bg-raised px-1.5 py-0.5 font-mono text-sm text-success">
                           {item.command}
                         </code>
                       </dt>
-                      <dd className="mt-0.5 text-sm text-zinc-400">{item.description}</dd>
+                      <dd className="mt-0.5 text-sm text-muted">{item.description}</dd>
                     </div>
                   ))}
                 </dl>
@@ -146,8 +146,8 @@ export function CommandsHelp({ onClose }: Props) {
             ))}
           </div>
 
-          <div className="mt-6 rounded border border-zinc-800 bg-zinc-900/50 p-3 text-sm text-zinc-400">
-            <p className="mb-1 font-semibold text-zinc-300">Good to know</p>
+          <div className="mt-6 rounded border border-line bg-raised/50 p-3 text-sm text-muted">
+            <p className="mb-1 font-semibold text-fg">Good to know</p>
             <ul className="list-disc space-y-1 pl-5">
               <li>No internet access, so pip install and npm install don&apos;t work.</li>
               <li>Only your project folder and /tmp can be written to.</li>
