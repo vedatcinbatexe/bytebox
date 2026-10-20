@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { loginPageUrl, logoutUrl, type User } from '@/lib/auth';
+import { CreateWorkspaceModal } from './CreateWorkspaceModal';
 
 interface Props {
   user: User | null;
@@ -25,6 +26,7 @@ function Avatar({ user, size }: { user: User; size: number }) {
 // Profile section in the header: who is signed in, with My projects and Sign out
 export function UserMenu({ user, loading }: Props) {
   const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close when clicking anywhere else
@@ -74,6 +76,16 @@ export function UserMenu({ user, loading }: Props) {
               <p className="truncate text-xs text-zinc-400">@{user.login} · signed in</p>
             </div>
           </div>
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              setCreating(true);
+            }}
+            className="block w-full px-3 py-2 text-left text-emerald-300 hover:bg-zinc-900"
+          >
+            ＋ Create workspace
+          </button>
           <Link href="/projects" role="menuitem" className="block px-3 py-2 hover:bg-zinc-900">
             📁 My projects
           </Link>
@@ -89,6 +101,7 @@ export function UserMenu({ user, loading }: Props) {
           </a>
         </div>
       )}
+      {creating && <CreateWorkspaceModal onClose={() => setCreating(false)} />}
     </div>
   );
 }

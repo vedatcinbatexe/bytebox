@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { UserMenu } from '@/components/UserMenu';
+import { CreateWorkspaceModal } from '@/components/CreateWorkspaceModal';
 import { useMe } from '@/lib/auth';
 import { fetchMyProjects, type ProjectSummary } from '@/lib/projects';
 
@@ -10,6 +11,7 @@ export default function MyProjectsPage() {
   const { user, loading } = useMe();
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -30,9 +32,14 @@ export default function MyProjectsPage() {
       <main className="mx-auto max-w-3xl p-6">
         <div className="mb-6 flex items-center gap-3">
           <h1 className="mr-auto text-2xl font-bold">My projects</h1>
-          <Link href="/" className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-500">
-            Open workspace
-          </Link>
+          {user && (
+            <button
+              onClick={() => setCreating(true)}
+              className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-500"
+            >
+              ＋ Create workspace
+            </button>
+          )}
         </div>
 
         {loading && <p className="text-zinc-500">Loading…</p>}
@@ -53,7 +60,13 @@ export default function MyProjectsPage() {
 
         {user && projects && projects.length === 0 && (
           <div className="rounded-lg border border-zinc-800 p-8 text-center text-zinc-400">
-            No projects yet. Open the workspace and click <span className="text-zinc-200">Share</span> to save one.
+            <p className="mb-4">No workspaces yet.</p>
+            <button
+              onClick={() => setCreating(true)}
+              className="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+            >
+              ＋ Create your first workspace
+            </button>
           </div>
         )}
 
@@ -78,6 +91,7 @@ export default function MyProjectsPage() {
           </ul>
         )}
       </main>
+      {creating && <CreateWorkspaceModal onClose={() => setCreating(false)} />}
     </div>
   );
 }

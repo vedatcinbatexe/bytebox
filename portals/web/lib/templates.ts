@@ -29,3 +29,8 @@ int main() {
 };
 
 export const STARTER_FILE = 'main.py';
+
+// A new, empty workspace starts with this single file
+export const NEW_WORKSPACE_FILE = 'init.js';
+export const NEW_WORKSPACE_CODE = `console.log("hello world");
+`;
