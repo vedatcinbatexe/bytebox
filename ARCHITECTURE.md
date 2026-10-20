@@ -33,7 +33,7 @@
 | `services/execution` | Run lifecycle | .NET (ASP.NET Core) | **gRPC** (+ REST health) | PostgreSQL `execution`, Redis | 5002 |
 | `services/project` | Projects (files & folders) & sharing | Python, FastAPI | **REST** | MongoDB | 5003 |
 | `services/runner` | Sandbox worker (one-off runs) | Python | **RabbitMQ** consumer | – | – |
-| `services/terminal` | Terminal sessions (Step 6) | Node.js, TypeScript | **WebSocket** | Redis (sessions) | 4100 |
+| `services/terminal` | Terminal sessions | Node.js, TypeScript | **WebSocket** | – (sessions in memory) | 4100 |
 
 **Infrastructure**
 
@@ -102,7 +102,6 @@ flowchart TB
     runner -- "Docker API" --> sandbox
     web -- "WebSocket" --> terminal
     terminal -- "Docker API" --> workspace
-    terminal -. "sessions" .-> redis
 ```
 
 ### Communication styles
@@ -266,7 +265,7 @@ bytebox/
     ├── identity/             # .NET REST service       → Dockerfile
     ├── execution/            # .NET gRPC service       → Dockerfile
     ├── project/              # Python FastAPI service  → Dockerfile
-    ├── terminal/             # Node.js WebSocket service → Dockerfile (Step 7)
+    ├── terminal/             # Node.js WebSocket service → Dockerfile
     └── runner/               # Python sandbox worker   → Dockerfile
 ```
 
@@ -287,6 +286,7 @@ docker compose down              # stop everything
 | http://localhost:5002/health | execution (REST) |
 | localhost:50051 | execution (gRPC) |
 | http://localhost:5003/docs | project (Swagger UI) |
+| ws://localhost:4100 | terminal (WebSocket) |
 | http://localhost:15673 | RabbitMQ management UI |
 
 ---
@@ -444,22 +444,24 @@ subscription {
 > The browser that creates a project keeps its edit token in `localStorage`. Anyone else with the link can view, run and fork it. Step 8 (login) will let owners edit from any device.
 
 ### Step 7 — Terminal Sessions
-- [ ] **Workspace image:** Python, Node.js, g++, bash and coreutils in one image
-- [ ] **New `services/terminal`** (Node.js + `ws` + Docker API): one long-lived sandbox container per session
-- [ ] Browser ↔ terminal over **WebSocket**; shell runs with a TTY (`docker exec` / attach)
-- [ ] **Web:** terminal panel with **xterm.js**, resizable, opens on demand
-- [ ] **File sync (v1):** project files copied in when the session starts; editor saves pushed into the container; **Refresh** button pulls files created or changed in the terminal back into the file tree
-- [ ] Same sandbox rules as runs: no network, non-root, read-only root FS + writable `/workspace`, CPU / memory / PID limits
-- [ ] Session limits: anyone can open one, **1 session per IP**, closed after **15 min idle** or **1 hour** total; sessions tracked in Redis
-- [ ] Reaper that removes expired session containers
-- [ ] Tests: open session, run commands, file sync both ways, idle timeout, session limit
+- [x] **Workspace image** (`bytebox/sandbox-workspace`): Alpine with bash, Python, Node.js, g++, coreutils, nano, less
+- [x] **New `services/terminal`** (Node.js + `ws` + Docker API): one long-lived workspace container per session; the shell runs as a `docker exec` with a TTY
+- [x] Browser ↔ terminal over **WebSocket** (JSON messages: `init`, `input`, `resize`, `sync`, `pull` → `ready`, `output`, `files`, `error`, `exit`)
+- [x] **Web:** terminal panel with **xterm.js** under the editor, `>_ Terminal` button, Restart and Close
+- [x] **File sync (v1):** project files copied in at start; edited files pushed in automatically (only changed files, debounced); **Refresh files** pulls text files created or changed in the terminal into the file tree (adds/updates, never deletes; binaries and files > 64 KB skipped)
+- [x] Same sandbox rules as runs: no network, `nobody` user, read-only root FS, writable `/workspace` and `/tmp` (tmpfs), no capabilities, 256 MB, half a CPU, 64 processes
+- [x] Session limits: **1 session per client IP** (a new one replaces the old one), closed after **15 min idle** or **1 hour**
+- [x] Only the web portal's origin may connect (`ALLOWED_ORIGINS`), other sites get 403
+- [x] Cleanup: containers removed when a session ends, on service start, and by a sweep every minute
+- [x] Tests (8): run project files, non-root + no network + read-only, sync, pull (skips binaries), replace old session, `exit` ends session, invalid paths, foreign origin rejected
 
 ```mermaid
 flowchart LR
     web["web<br/>xterm.js"] -- "WebSocket" --> terminal["terminal service<br/>Node.js"]
-    terminal -- "Docker API<br/>exec with TTY" --> ws["🧪 Workspace container<br/>/workspace (project files)<br/>15 min idle / 1 h max"]
-    terminal -. "sessions, limits" .-> redis[("Redis")]
+    terminal -- "Docker API<br/>exec bash with TTY" --> ws["🧪 Workspace container<br/>/workspace (project files)<br/>15 min idle / 1 h max"]
 ```
+
+> Locally, every browser reaches the terminal service through Docker Desktop with the same address, so all local browsers count as one client: opening the terminal in a second browser replaces the first one's session.
 
 ### Step 8 — Identity Service & Auth
 - [ ] `users` table (EF Core)
@@ -504,4 +506,5 @@ flowchart LR
 | Isolation | Docker per run → gVisor later | Simple start, clear upgrade path |
 | Multi-file runs | Whole project sent with each run, entry = open file | Runs stay stateless and one-off; same runner design as single files |
 | Terminal | Separate long-lived session containers + WebSocket service | Interactive shells need state and a live connection; keep them apart from one-off runs |
-| Terminal ↔ file tree | Push on save + Refresh button (v1) | Simple and reliable; live two-way sync later |
+| Terminal ↔ file tree | Push changed files + Refresh button (v1) | Simple and reliable; live two-way sync later |
+| Terminal sessions | In memory, 1 per client IP | One terminal instance is enough for now; move to Redis when scaling out |
