@@ -51,6 +51,11 @@ export async function createRun(
   return response.runId;
 }
 
+export async function listRuns(userId: string, limit: number): Promise<GrpcRun[]> {
+  const response = await unary<{ runs?: GrpcRun[] }>('ListRuns', { userId, limit });
+  return response.runs ?? [];
+}
+
 export function getRun(runId: string): Promise<GrpcRun> {
   return unary<GrpcRun>('GetRun', { runId });
 }

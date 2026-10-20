@@ -13,6 +13,18 @@ service ExecutionService {
 
   // Send the current state, then every update until the run is finished
   rpc StreamRun(GetRunRequest) returns (stream Run);
+
+  // A user's most recent runs, newest first
+  rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
+}
+
+message ListRunsRequest {
+  string user_id = 1;
+  int32 limit = 2; // 1-100, default 20
+}
+
+message ListRunsResponse {
+  repeated Run runs = 1;
 }
 
 message CreateRunRequest {

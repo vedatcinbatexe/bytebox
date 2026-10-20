@@ -4,6 +4,7 @@ import { GraphQLError } from 'graphql';
 import {
   createRun,
   getRun,
+  listRuns,
   grpc,
   isGrpcError,
   streamRun,
@@ -59,6 +60,8 @@ const typeDefs = /* GraphQL */ `
     me: User
     "Projects owned by the signed-in user, newest first"
     myProjects: [ProjectSummary!]!
+    "Runs of the signed-in user, newest first"
+    myRuns(limit: Int = 20): [Run!]!
   }
 
   type Mutation {
@@ -214,6 +217,14 @@ export const schema = createSchema<Context>({
       project: (_, { slug }: { slug: string }) => getProject(slug),
       me: (_, __, { user }) => user,
       myProjects: async (_, __, { user }) => (user ? ((await listMyProjects(user.id)) ?? []) : []),
+      myRuns: async (_, { limit }: { limit: number }, { user }) => {
+        if (!user) return [];
+        try {
+          return (await listRuns(user.id, limit)).map(toRun);
+        } catch (error) {
+          throw toGraphQLError(error);
+        }
+      },
     },
 
     Project: {
