@@ -1207,7 +1207,12 @@ export function Playground({ slug }: Props) {
                   placeholder="Input for your program"
                 />
               </section>
-              <OutputPanel run={run} error={error} />
+              <OutputPanel
+                run={run}
+                error={error}
+                filePaths={Object.keys(project.files)}
+                onOpenLocation={(location) => openMatch(location.path, location.line, location.column, 0)}
+              />
             </>
           )}
         </aside>
