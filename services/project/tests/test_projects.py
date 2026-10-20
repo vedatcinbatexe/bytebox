@@ -150,6 +150,19 @@ def test_versions_are_only_for_the_owner(client):
     assert client.get(f"/projects/{slug}/versions/not-an-id", headers=ALICE).status_code == 404
 
 
+def test_autosaves_keep_at_most_one_version_per_two_minutes(client):
+    slug = create(client)["slug"]
+    for title in ["v2", "v3", "v4"]:
+        body = {**PROJECT, "title": title}
+        assert client.put(f"/projects/{slug}?autosave=true", json=body, headers=ALICE).status_code == 200
+    versions = client.get(f"/projects/{slug}/versions", headers=ALICE).json()
+    assert [v["title"] for v in versions] == ["Greeter"]  # only the first autosave kept a version
+    assert client.get(f"/projects/{slug}").json()["title"] == "v4"
+
+    save(client, slug, "v5")  # a normal save always keeps one
+    assert [v["title"] for v in client.get(f"/projects/{slug}/versions", headers=ALICE).json()] == ["v4", "Greeter"]
+
+
 def test_only_the_last_30_versions_are_kept(client):
     slug = create(client)["slug"]
     for number in range(35):

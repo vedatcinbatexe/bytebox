@@ -90,7 +90,8 @@ const typeDefs = /* GraphQL */ `
     "Save a new project (or a fork, with forkedFrom) owned by the signed-in user"
     createProject(input: ProjectInput!, forkedFrom: String): Project!
     "Save changes to a project you own"
-    updateProject(slug: String!, input: ProjectInput!): Project!
+    # autosave: keep at most one version every 2 minutes
+    updateProject(slug: String!, input: ProjectInput!, autosave: Boolean = false): Project!
     "Rename a project you own"
     renameProject(slug: String!, title: String!): Project!
     "public (listed on Explore), unlisted (anyone with the link) or private (only you)"
@@ -370,10 +371,14 @@ export const schema = createSchema<Context>({
         return true;
       },
 
-      updateProject: async (_, { slug, input }: { slug: string; input: ProjectInput }, { user }) => {
+      updateProject: async (
+        _,
+        { slug, input, autosave }: { slug: string; input: ProjectInput; autosave?: boolean },
+        { user },
+      ) => {
         const signedIn = requireUser(user);
         await limitSaves(signedIn.id);
-        return updateProject(slug, input, signedIn.id);
+        return updateProject(slug, input, signedIn.id, autosave ?? false);
       },
 
       createRun: async (

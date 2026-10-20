@@ -174,8 +174,14 @@ export async function deleteProject(slug: string, userId: string): Promise<void>
   if (!deleted) throw new GraphQLError('Project not found', { extensions: { code: 'NOT_FOUND' } });
 }
 
-export async function updateProject(slug: string, input: ProjectInput, userId: string): Promise<Project> {
-  const updated = await call<Project>('PUT', `/projects/${encodeURIComponent(slug)}`, {
+export async function updateProject(
+  slug: string,
+  input: ProjectInput,
+  userId: string,
+  autosave = false,
+): Promise<Project> {
+  const query = autosave ? '?autosave=true' : '';
+  const updated = await call<Project>('PUT', `/projects/${encodeURIComponent(slug)}${query}`, {
     body: input,
     userId,
   });

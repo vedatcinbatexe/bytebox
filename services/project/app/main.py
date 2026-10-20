@@ -1,7 +1,7 @@
 import re
 import secrets
 import string
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import FastAPI, Header, HTTPException, Path, Response, status
@@ -25,6 +25,7 @@ app = FastAPI(title="Bytebox Project Service")
 
 SLUG_ALPHABET = string.ascii_letters + string.digits
 MAX_VERSIONS = 30  # per project
+AUTOSAVE_VERSION_GAP = timedelta(minutes=2)  # autosaves keep at most one version per 2 minutes
 SLUG_LENGTH = 8
 Slug = Annotated[str, Path(pattern=f"^[A-Za-z0-9]{{{SLUG_LENGTH}}}$")]
 # Set by the gateway from a verified session. Only the gateway may call this service directly.
@@ -144,10 +145,11 @@ def star_state(slug, user_id):
 
 
 @app.put("/projects/{slug}", response_model=Project)
-def update_project(slug: Slug, body: ProjectInput, user_id: UserId = None):
+def update_project(slug: Slug, body: ProjectInput, user_id: UserId = None, autosave: bool = False):
     document = find_project(slug)
     check_owner(document, require_user(user_id))
-    keep_version(document)
+    if not (autosave and kept_version_recently(slug)):
+        keep_version(document)
     db.projects.update_one({"_id": slug}, {"$set": {**body.model_dump(), "updated_at": datetime.now(UTC)}})
     return to_project(find_project(slug))
 
@@ -210,12 +212,18 @@ def keep_version(document):
             "folders": document.get("folders", []),
             "stdin": document.get("stdin", ""),
             "saved_at": document["updated_at"],
+            "kept_at": datetime.now(UTC),
         }
     )
     old = db.versions.find({"project_id": document["_id"]}, {"_id": 1}).sort("saved_at", -1).skip(MAX_VERSIONS)
     old_ids = [d["_id"] for d in old]
     if old_ids:
         db.versions.delete_many({"_id": {"$in": old_ids}})
+
+
+def kept_version_recently(slug):
+    latest = db.versions.find_one({"project_id": slug, "kept_at": {"$exists": True}}, sort=[("kept_at", -1)])
+    return latest is not None and datetime.now(UTC) - latest["kept_at"].replace(tzinfo=UTC) < AUTOSAVE_VERSION_GAP
 
 
 def find_version(slug, version_id):
