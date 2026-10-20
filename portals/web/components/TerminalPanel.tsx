@@ -31,13 +31,14 @@ interface Props {
   // Called with changes made in the terminal (files created, edited, moved or deleted)
   onTerminalChanges: (changes: TerminalChanges) => void;
   onClose: () => void;
+  height?: number; // pixels, on desktop
 }
 
 function toList(files: Record<string, string>): ProjectFile[] {
   return Object.entries(files).map(([path, content]) => ({ path, content }));
 }
 
-export function TerminalPanel({ project, onTerminalChanges, onClose }: Props) {
+export function TerminalPanel({ project, onTerminalChanges, onClose, height }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const projectRef = useRef(project);
@@ -177,7 +178,10 @@ export function TerminalPanel({ project, onTerminalChanges, onClose }: Props) {
   }, [project, status]);
 
   return (
-    <section className="flex h-72 shrink-0 flex-col border-t border-line bg-panel">
+    <section
+      className="flex h-72 shrink-0 flex-col border-t border-line bg-panel md:h-(--terminal-h)"
+      style={{ '--terminal-h': `${height ?? 288}px` } as React.CSSProperties}
+    >
       <div className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-xs">
         <h2 className="font-semibold tracking-wide text-muted uppercase">Terminal</h2>
         <span className={status === 'ready' ? 'text-success' : 'text-subtle'}>
