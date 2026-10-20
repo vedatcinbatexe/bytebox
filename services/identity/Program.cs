@@ -29,7 +29,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "identity"
 // 1. Send the user to GitHub. A random "state" protects against forged login requests.
 app.MapGet("/auth/github/login", (HttpContext http, GitHubClient github, string? returnTo) =>
 {
-    if (!github.IsConfigured) return Results.Redirect($"{webUrl}/?login=not-configured");
+    if (!github.IsConfigured) return Results.Redirect($"{webUrl}/login?error=not-configured");
 
     var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     SetTemporaryCookie(http, StateCookie, state);
@@ -49,11 +49,11 @@ app.MapGet("/auth/github/callback", async (
     if (code is null || state is null || expectedState is null ||
         !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(state), Encoding.UTF8.GetBytes(expectedState)))
     {
-        return Results.Redirect($"{webUrl}/?login=failed");
+        return Results.Redirect($"{webUrl}/login?error=failed");
     }
 
     var profile = await github.GetProfileAsync(code);
-    if (profile is null) return Results.Redirect($"{webUrl}/?login=failed");
+    if (profile is null) return Results.Redirect($"{webUrl}/login?error=failed");
 
     var user = await SaveUserAsync(db, profile);
     SetSessionCookie(http, tokens.Issue(user));

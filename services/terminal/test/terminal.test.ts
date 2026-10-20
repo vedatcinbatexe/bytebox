@@ -1,11 +1,26 @@
 // Integration tests: need `docker compose up` (terminal service on localhost:4100)
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { SignJWT } from 'jose';
 import WebSocket from 'ws';
 import type { ProjectFile, ServerMessage } from '../src/protocol.js';
 
 const URL = process.env.TERMINAL_URL ?? 'ws://localhost:4100';
 const ORIGIN = 'http://localhost:3000';
+// Must match the service's JWT_SECRET (run the tests with the same environment as docker compose)
+const SECRET = new TextEncoder().encode(
+  process.env.JWT_SECRET ?? 'dev-only-secret-please-set-JWT_SECRET-in-env',
+);
+
+async function sessionCookie(userId: string, secret = SECRET) {
+  const token = await new SignJWT({ login: userId })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(userId)
+    .setIssuer('bytebox-identity')
+    .setExpirationTime('1h')
+    .sign(secret);
+  return `bytebox_session=${token}`;
+}
 
 const PROJECT: ProjectFile[] = [
   { path: 'main.py', content: 'from utils.greet import greet\nprint(greet("terminal"))\n' },
@@ -13,8 +28,8 @@ const PROJECT: ProjectFile[] = [
 ];
 
 // A connected terminal with helpers to type commands and wait for output
-async function openTerminal(files = PROJECT) {
-  const ws = new WebSocket(URL, { origin: ORIGIN });
+async function openTerminal(files = PROJECT, userId = 'test-user') {
+  const ws = new WebSocket(URL, { origin: ORIGIN, headers: { cookie: await sessionCookie(userId) } });
   const messages: ServerMessage[] = [];
   let output = '';
   ws.on('message', (raw) => {
@@ -161,7 +176,27 @@ test('invalid file paths are rejected', async () => {
 });
 
 test('other websites cannot open a terminal', async () => {
-  const ws = new WebSocket(URL, { origin: 'https://evil.example' });
+  const ws = new WebSocket(URL, { origin: 'https://evil.example', headers: { cookie: await sessionCookie('x') } });
   const error = await new Promise<Error>((resolve) => ws.on('error', resolve));
   assert.match(error.message, /403/);
+});
+
+test('signed-out users cannot open a terminal', async () => {
+  const forged = await sessionCookie('x', new TextEncoder().encode('not-the-real-secret-not-the-real-secret'));
+  for (const headers of [{}, { cookie: forged }]) {
+    const ws = new WebSocket(URL, { origin: ORIGIN, headers });
+    const error = await new Promise<Error>((resolve) => ws.on('error', resolve));
+    assert.match(error.message, /401/);
+  }
+});
+
+test('different users get separate terminals', async () => {
+  const alice = await openTerminal(PROJECT, 'alice');
+  await alice.ready();
+  const bob = await openTerminal(PROJECT, 'bob');
+  await bob.ready();
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.ok(!alice.messages.some((m) => m.type === 'exit'), 'alice should still be connected');
+  alice.close();
+  bob.close();
 });

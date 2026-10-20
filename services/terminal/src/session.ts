@@ -16,16 +16,16 @@ const SCAN_AFTER_OUTPUT_MS = 400;
 const SCAN_EVERY_MS = 5000;
 export const LABEL = 'bytebox-terminal';
 
-// One terminal session per client (IP address). A new one replaces the old one.
+// One terminal session per user. A new one replaces the old one.
 const sessions = new Map<string, Session>();
 
-export function openSession(ws: WebSocket, clientId: string) {
-  console.log(`Session opened for ${clientId}`);
-  sessions.get(clientId)?.end('The terminal was opened in another tab');
+export function openSession(ws: WebSocket, userId: string) {
+  console.log(`Session opened for user ${userId}`);
+  sessions.get(userId)?.end('The terminal was opened in another tab');
   const session = new Session(ws, () => {
-    if (sessions.get(clientId) === session) sessions.delete(clientId);
+    if (sessions.get(userId) === session) sessions.delete(userId);
   });
-  sessions.set(clientId, session);
+  sessions.set(userId, session);
 }
 
 class Session {

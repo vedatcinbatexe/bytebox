@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "dockerode": "^5.0.1",
+    "jose": "^6.2.13",
     "tar-stream": "^3.2.2",
     "ws": "^8.22.0"
   },

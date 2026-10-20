@@ -8,6 +8,9 @@ import { FileTree } from './FileTree';
 import { OutputPanel } from './OutputPanel';
 import { TerminalPanel } from './TerminalPanel';
 import { CommandsHelp } from './CommandsHelp';
+import { LoginRequiredModal } from './LoginRequiredModal';
+import { UserMenu } from './UserMenu';
+import { useMe } from '@/lib/auth';
 import { createRun, watchRun, type Run } from '@/lib/runs';
 import {
   MAX_FILES,
@@ -27,13 +30,7 @@ import {
 import { STARTER_FILE, STARTER_PROJECT } from '@/lib/templates';
 import { load, save } from '@/lib/storage';
 import { applyChanges, type TerminalChanges } from '@/lib/terminalSync';
-import {
-  createProject,
-  editTokenFor,
-  fetchProject,
-  updateProject,
-  type SavedProject,
-} from '@/lib/projects';
+import { createProject, fetchProject, updateProject, type SavedProject } from '@/lib/projects';
 
 const STORAGE_KEY = 'bytebox:workspace';
 
@@ -42,7 +39,7 @@ const SECONDARY_BUTTON =
 
 const ERROR_MESSAGES: Record<string, string> = {
   RATE_LIMITED: 'Too many runs. Please wait a minute and try again.',
-  FORBIDDEN: "You can't save this project. Fork it to make your own copy.",
+  FORBIDDEN: 'Only the owner can save this project. Fork it to make your own copy.',
   NETWORK_ERROR: 'Cannot reach the Bytebox API. Is the gateway running?',
 };
 
@@ -89,6 +86,10 @@ function errorMessage(error: unknown): string {
   return ERROR_MESSAGES[code ?? ''] ?? message;
 }
 
+function isUnauthenticated(error: unknown): boolean {
+  return (error as { code?: string }).code === 'UNAUTHENTICATED';
+}
+
 interface Props {
   // Shared project to open; without it the local workspace (localStorage) is used
   slug?: string;
@@ -96,6 +97,8 @@ interface Props {
 
 export function Playground({ slug }: Props) {
   const router = useRouter();
+  const { user, loading: userLoading } = useMe();
+  const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const [workspace, setWorkspace] = useState<Workspace>(STARTER_WORKSPACE);
   const [loaded, setLoaded] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -127,7 +130,7 @@ export function Playground({ slug }: Props) {
           const opened = workspaceFor(saved);
           setWorkspace(opened);
           setSavedSnapshot(snapshot(opened));
-          setIsOwner(editTokenFor(slug) !== null);
+          setIsOwner(saved.ownedByMe);
           setLoaded(true);
         })
         .catch((loadError) => showNotice(errorMessage(loadError), true));
@@ -145,10 +148,10 @@ export function Playground({ slug }: Props) {
     return () => closeSubscription.current?.();
   }, [slug]);
 
-  // Autosave the local workspace
+  // Autosave the local workspace (only signed-in users can change it)
   useEffect(() => {
-    if (loaded && !slug) save(STORAGE_KEY, JSON.stringify(workspace));
-  }, [workspace, loaded, slug]);
+    if (loaded && !slug && user) save(STORAGE_KEY, JSON.stringify(workspace));
+  }, [workspace, loaded, slug, user]);
 
   // Warn before leaving a shared project with unsaved changes
   useEffect(() => {
@@ -157,6 +160,13 @@ export function Playground({ slug }: Props) {
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [hasUnsavedChanges]);
+
+  // Running code and changing anything needs a signed-in user; otherwise ask them to log in
+  function canChange(): boolean {
+    if (user) return true;
+    if (!userLoading) setLoginPromptOpen(true);
+    return false;
+  }
 
   function showNotice(text: string, isError = false) {
     setNotice({ text, isError });
@@ -183,6 +193,7 @@ export function Playground({ slug }: Props) {
 
   // Local workspace -> new shared project
   async function share() {
+    if (!canChange()) return;
     setBusy(true);
     try {
       const created = await createProject(currentInput());
@@ -190,13 +201,14 @@ export function Playground({ slug }: Props) {
       await copyLink(url);
       router.push(`/p/${created.slug}`);
     } catch (shareError) {
-      showNotice(errorMessage(shareError), true);
+      if (isUnauthenticated(shareError)) setLoginPromptOpen(true);
+      else showNotice(errorMessage(shareError), true);
       setBusy(false);
     }
   }
 
   async function saveChanges() {
-    if (!slug) return;
+    if (!slug || !canChange()) return;
     setBusy(true);
     try {
       const input = currentInput();
@@ -204,20 +216,22 @@ export function Playground({ slug }: Props) {
       setSavedSnapshot(snapshot({ ...workspace, ...input }));
       showNotice('Saved');
     } catch (saveError) {
-      showNotice(errorMessage(saveError), true);
+      if (isUnauthenticated(saveError)) setLoginPromptOpen(true);
+      else showNotice(errorMessage(saveError), true);
     } finally {
       setBusy(false);
     }
   }
 
   async function fork() {
-    if (!slug) return;
+    if (!slug || !canChange()) return;
     setBusy(true);
     try {
       const created = await createProject({ ...currentInput(), title: `${title} (fork)` }, slug);
       router.push(`/p/${created.slug}`);
     } catch (forkError) {
-      showNotice(errorMessage(forkError), true);
+      if (isUnauthenticated(forkError)) setLoginPromptOpen(true);
+      else showNotice(errorMessage(forkError), true);
       setBusy(false);
     }
   }
@@ -257,6 +271,7 @@ export function Playground({ slug }: Props) {
   }
 
   function newFile() {
+    if (!canChange()) return;
     if (Object.keys(project.files).length >= MAX_FILES) {
       window.alert(`A project can have at most ${MAX_FILES} files.`);
       return;
@@ -273,6 +288,7 @@ export function Playground({ slug }: Props) {
   }
 
   function newFolder() {
+    if (!canChange()) return;
     const where = selectedFolder ? ` in ${selectedFolder}/` : '';
     const path = askForNewPath(`New folder name${where}`, selectedFolder);
     if (!path) return;
@@ -281,6 +297,7 @@ export function Playground({ slug }: Props) {
   }
 
   function rename(path: string) {
+    if (!canChange()) return;
     const newPath = askForNewPath('Rename to', parentFolder(path), path.split('/').pop());
     if (!newPath) return;
     const move = (tab: string) =>
@@ -293,6 +310,7 @@ export function Playground({ slug }: Props) {
   }
 
   function remove(path: string) {
+    if (!canChange()) return;
     if (!window.confirm(`Delete "${path}"? This cannot be undone.`)) return;
     const isGone = (tab: string) => tab === path || tab.startsWith(`${path}/`);
     const remaining = openTabs.filter((tab) => !isGone(tab));
@@ -320,7 +338,7 @@ export function Playground({ slug }: Props) {
   // ---------- Running ----------
 
   async function runActiveFile() {
-    if (running) return;
+    if (running || !canChange()) return;
     if (!activePath || !runLanguage(activePath)) {
       setError('Open a .py, .js or .cpp file to run it.');
       return;
@@ -355,8 +373,8 @@ export function Playground({ slug }: Props) {
         },
       );
     } catch (runError) {
-      const { message, code } = runError as { message: string; code?: string };
-      setError(ERROR_MESSAGES[code ?? ''] ?? message);
+      if (isUnauthenticated(runError)) setLoginPromptOpen(true);
+      else setError(errorMessage(runError));
       setRunning(false);
     }
   }
@@ -365,9 +383,13 @@ export function Playground({ slug }: Props) {
   // The ref always points at the latest runActiveFile.
   const runRef = useRef(runActiveFile);
   runRef.current = runActiveFile;
+  const canChangeRef = useRef(canChange);
+  canChangeRef.current = canChange;
   const onEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => runRef.current());
+    // The editor is read-only when signed out; typing asks the visitor to log in
+    editor.onDidAttemptReadOnlyEdit(() => canChangeRef.current());
   };
 
   const canRun = activePath !== null && runLanguage(activePath) !== null;
@@ -401,6 +423,8 @@ export function Playground({ slug }: Props) {
         <input
           value={title}
           onChange={(event) => update({ title: event.target.value })}
+          readOnly={!user}
+          onClick={() => canChange()}
           maxLength={100}
           aria-label="Project title"
           className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-2 py-1 text-sm text-zinc-200 outline-none hover:border-zinc-800 focus:border-zinc-700"
@@ -445,7 +469,7 @@ export function Playground({ slug }: Props) {
           </>
         )}
         <button
-          onClick={() => setTerminalOpen((open) => !open)}
+          onClick={() => (terminalOpen ? setTerminalOpen(false) : canChange() && setTerminalOpen(true))}
           className={SECONDARY_BUTTON}
           title="Open a shell with your project files"
         >
@@ -466,11 +490,21 @@ export function Playground({ slug }: Props) {
         >
           {running ? 'Running…' : `▶ Run ${canRun ? activePath : ''}`}
         </button>
+        <UserMenu user={user} loading={userLoading} />
       </header>
 
-      {slug && !isOwner && (
+      {!userLoading && !user && (
+        <p className="border-b border-zinc-800 bg-amber-500/10 px-4 py-1.5 text-xs text-amber-200">
+          You&apos;re browsing as a guest.{' '}
+          <button onClick={() => setLoginPromptOpen(true)} className="underline">
+            Log in or sign up
+          </button>{' '}
+          to run code, edit files and use the terminal.
+        </p>
+      )}
+      {user && slug && !isOwner && (
         <p className="border-b border-zinc-800 bg-sky-500/10 px-4 py-1.5 text-xs text-sky-200">
-          You&apos;re viewing a shared project. You can edit and run it, but to save changes,{' '}
+          You&apos;re viewing someone else&apos;s project. You can edit and run it, but to save changes,{' '}
           <button onClick={fork} className="underline">
             fork it
           </button>{' '}
@@ -479,6 +513,7 @@ export function Playground({ slug }: Props) {
       )}
 
       {helpOpen && <CommandsHelp onClose={() => setHelpOpen(false)} />}
+      {loginPromptOpen && <LoginRequiredModal onClose={() => setLoginPromptOpen(false)} />}
 
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         {/* File explorer */}
@@ -558,7 +593,13 @@ export function Playground({ slug }: Props) {
                 }
                 onMount={onEditorMount}
                 theme="vs-dark"
-                options={{ fontSize: 14, minimap: { enabled: false }, scrollBeyondLastLine: false }}
+                options={{
+                  fontSize: 14,
+                  minimap: { enabled: false },
+                  scrollBeyondLastLine: false,
+                  readOnly: !user,
+                  readOnlyMessage: { value: 'Log in to edit' },
+                }}
               />
             ) : (
               <p className="p-6 text-sm text-zinc-500">Open a file from the explorer, or create one.</p>
@@ -582,6 +623,8 @@ export function Playground({ slug }: Props) {
             <textarea
               value={stdin}
               onChange={(event) => update({ stdin: event.target.value })}
+              readOnly={!user}
+              onClick={() => canChange()}
               rows={4}
               spellCheck={false}
               className="w-full resize-none bg-transparent px-4 py-2 font-mono text-sm outline-none"

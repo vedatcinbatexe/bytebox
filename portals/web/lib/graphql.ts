@@ -26,6 +26,7 @@ export async function request<T>(query: string, variables?: object): Promise<T> 
   try {
     response = await fetch(GATEWAY_URL, {
       method: 'POST',
+      credentials: 'include', // send the session cookie to the gateway
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, variables }),
     });
@@ -50,7 +51,7 @@ export function subscribe<T>(
   url.searchParams.set('query', query);
   url.searchParams.set('variables', JSON.stringify(variables));
 
-  const source = new EventSource(url);
+  const source = new EventSource(url, { withCredentials: true });
   const close = () => source.close();
 
   source.addEventListener('next', (event) => {

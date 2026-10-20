@@ -32,6 +32,16 @@ export interface Context {
   user: SessionUser | null; // from the session cookie
 }
 
+// Running code and changing projects needs a signed-in user
+function requireUser(user: SessionUser | null): SessionUser {
+  if (!user) {
+    throw new GraphQLError('Log in or sign up before making changes', {
+      extensions: { code: 'UNAUTHENTICATED' },
+    });
+  }
+  return user;
+}
+
 const typeDefs = /* GraphQL */ `
   type Query {
     health: String!
@@ -47,10 +57,10 @@ const typeDefs = /* GraphQL */ `
 
   type Mutation {
     createRun(input: CreateRunInput!): Run!
-    "Save a new project (or a fork, with forkedFrom). Keep the editToken: it is needed to save changes."
-    createProject(input: ProjectInput!, forkedFrom: String): SavedProject!
-    "Save changes to a project you own (signed in) or have the edit token for"
-    updateProject(slug: String!, editToken: String, input: ProjectInput!): Project!
+    "Save a new project (or a fork, with forkedFrom) owned by the signed-in user"
+    createProject(input: ProjectInput!, forkedFrom: String): Project!
+    "Save changes to a project you own"
+    updateProject(slug: String!, input: ProjectInput!): Project!
   }
 
   type User {
@@ -109,11 +119,6 @@ const typeDefs = /* GraphQL */ `
     ownedByMe: Boolean!
     createdAt: String!
     updatedAt: String!
-  }
-
-  type SavedProject {
-    project: Project!
-    editToken: String!
   }
 
   input ProjectInput {
@@ -207,28 +212,26 @@ export const schema = createSchema<Context>({
         _,
         { input, forkedFrom }: { input: ProjectInput; forkedFrom?: string },
         { user },
-      ) => createProject({ ...input, ...(forkedFrom ? { forkedFrom } : {}) }, user?.id),
+      ) => createProject({ ...input, ...(forkedFrom ? { forkedFrom } : {}) }, requireUser(user).id),
 
-      updateProject: (
-        _,
-        { slug, editToken, input }: { slug: string; editToken?: string; input: ProjectInput },
-        { user },
-      ) => updateProject(slug, input, editToken ?? undefined, user?.id),
+      updateProject: (_, { slug, input }: { slug: string; input: ProjectInput }, { user }) =>
+        updateProject(slug, input, requireUser(user).id),
 
       createRun: async (
         _,
         { input }: { input: { files: ProjectFile[]; entryFile: string; stdin?: string } },
-        { req, user },
+        { user },
       ) => {
+        const signedIn = requireUser(user);
         // Project rules (paths, limits, language) are checked by the execution service
-        if (await isRateLimited(req.socket.remoteAddress ?? 'unknown', user?.id)) {
+        if (await isRateLimited(signedIn.id)) {
           throw new GraphQLError('Too many runs, please wait a minute', {
             extensions: { code: 'RATE_LIMITED' },
           });
         }
 
         try {
-          const runId = await createRun(input.files, input.entryFile, input.stdin ?? '', user?.id);
+          const runId = await createRun(input.files, input.entryFile, input.stdin ?? '', signedIn.id);
           return toRun(await getRun(runId));
         } catch (error) {
           throw toGraphQLError(error);
