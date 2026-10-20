@@ -8,6 +8,7 @@ interface Props {
   run: Run | null;
   saveState: 'saved' | 'unsaved' | 'local' | 'guest' | 'other';
   onShowShortcuts: () => void;
+  onShowSettings: () => void;
 }
 
 const LANGUAGE_NAMES: Record<string, string> = {
@@ -34,7 +35,7 @@ const SAVE_LABELS = {
 };
 
 // Thin bar at the bottom of the IDE
-export function StatusBar({ language, lines, cursor, run, saveState, onShowShortcuts }: Props) {
+export function StatusBar({ language, lines, cursor, run, saveState, onShowShortcuts, onShowSettings }: Props) {
   return (
     <footer className="flex shrink-0 items-center gap-4 overflow-x-auto border-t border-line bg-panel px-3 py-1 text-xs whitespace-nowrap text-muted">
       {language && <span>{LANGUAGE_NAMES[language] ?? language}</span>}
@@ -51,6 +52,9 @@ export function StatusBar({ language, lines, cursor, run, saveState, onShowShort
         </span>
       )}
       <span className={`ml-auto ${saveState === 'unsaved' ? 'text-warning' : ''}`}>{SAVE_LABELS[saveState]}</span>
+      <button onClick={onShowSettings} className="rounded px-1.5 hover:bg-raised hover:text-fg" title="Font size, tab size, word wrap…">
+        ⚙ Editor
+      </button>
       <button onClick={onShowShortcuts} className="rounded px-1.5 hover:bg-raised hover:text-fg" title="Keyboard shortcuts (?)">
         ⌨ Shortcuts
       </button>
