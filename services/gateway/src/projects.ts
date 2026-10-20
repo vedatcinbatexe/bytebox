@@ -66,6 +66,7 @@ async function call<T>(
   if (!response.ok) {
     throw new GraphQLError('Project service error', { extensions: { code: 'SERVICE_UNAVAILABLE' } });
   }
+  if (response.status === 204) return {} as T; // e.g. DELETE: success without a body
   return (await response.json()) as T;
 }
 
@@ -86,6 +87,20 @@ export async function createProject(
     throw new GraphQLError('The project to fork was not found', { extensions: { code: 'NOT_FOUND' } });
   }
   return created;
+}
+
+export async function renameProject(slug: string, title: string, userId: string): Promise<Project> {
+  const renamed = await call<Project>('PATCH', `/projects/${encodeURIComponent(slug)}`, {
+    body: { title },
+    userId,
+  });
+  if (!renamed) throw new GraphQLError('Project not found', { extensions: { code: 'NOT_FOUND' } });
+  return renamed;
+}
+
+export async function deleteProject(slug: string, userId: string): Promise<void> {
+  const deleted = await call<object>('DELETE', `/projects/${encodeURIComponent(slug)}`, { userId });
+  if (!deleted) throw new GraphQLError('Project not found', { extensions: { code: 'NOT_FOUND' } });
 }
 
 export async function updateProject(slug: string, input: ProjectInput, userId: string): Promise<Project> {

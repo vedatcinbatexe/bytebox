@@ -7,7 +7,7 @@ from fastapi import FastAPI, Header, HTTPException, Path, Response, status
 from pymongo.errors import DuplicateKeyError
 
 from . import db
-from .models import CreateProjectInput, Project, ProjectInput, ProjectSummary
+from .models import CreateProjectInput, Project, ProjectInput, ProjectSummary, RenameInput
 
 app = FastAPI(title="Bytebox Project Service")
 
@@ -67,6 +67,13 @@ def get_project(slug: Slug):
 def update_project(slug: Slug, body: ProjectInput, user_id: UserId = None):
     check_owner(find_project(slug), require_user(user_id))
     db.projects.update_one({"_id": slug}, {"$set": {**body.model_dump(), "updated_at": datetime.now(UTC)}})
+    return to_project(find_project(slug))
+
+
+@app.patch("/projects/{slug}", response_model=Project)
+def rename_project(slug: Slug, body: RenameInput, user_id: UserId = None):
+    check_owner(find_project(slug), require_user(user_id))
+    db.projects.update_one({"_id": slug}, {"$set": {"title": body.title, "updated_at": datetime.now(UTC)}})
     return to_project(find_project(slug))
 
 
