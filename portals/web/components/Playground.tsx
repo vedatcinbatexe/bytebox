@@ -9,6 +9,8 @@ import { OutputPanel, isFinished } from './OutputPanel';
 import { PreviewPanel } from './PreviewPanel';
 import { SearchPanel } from './SearchPanel';
 import { ResizeHandle } from './ResizeHandle';
+import { StatusBar } from './StatusBar';
+import { ShortcutsDialog } from './ShortcutsDialog';
 import { DEFAULT_SIZES, clampSize, loadSizes, saveSizes, type PanelSizes } from '@/lib/layout';
 import { htmlFiles } from '@/lib/preview';
 import { downloadZip } from '@/lib/zip';
@@ -117,6 +119,8 @@ export function Playground({ slug }: Props) {
   const [notice, setNotice] = useState<{ text: string; isError: boolean } | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [cursor, setCursor] = useState<{ line: number; column: number } | null>(null);
   const [asideTab, setAsideTab] = useState<'output' | 'preview'>('output');
   const [searchOpen, setSearchOpen] = useState(false);
   const [sizes, setSizes] = useState<PanelSizes>(DEFAULT_SIZES);
@@ -277,6 +281,34 @@ export function Playground({ slug }: Props) {
   function update(changes: Partial<Workspace>) {
     setWorkspace((current) => ({ ...current, ...changes }));
   }
+
+  // ---------- Keyboard: save and shortcuts list ----------
+
+  function saveShortcut() {
+    if (!canChange()) return;
+    if (slug && isOwner) void saveChanges();
+    else if (slug) showNotice('This is someone else’s project. Fork it to save your own copy.');
+    else showNotice('Your workspace is saved in this browser. Use Share to get a link.');
+  }
+  const saveShortcutRef = useRef(saveShortcut);
+  saveShortcutRef.current = saveShortcut;
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault(); // not the browser's "Save page"
+        saveShortcutRef.current();
+        return;
+      }
+      const target = event.target as HTMLElement;
+      const typing = target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+      // "?" (some keyboards report it as Shift + "/")
+      const questionMark = event.key === '?' || (event.key === '/' && event.shiftKey);
+      if (questionMark && !typing) setShortcutsOpen(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // ---------- Formatting ----------
 
@@ -495,6 +527,10 @@ export function Playground({ slug }: Props) {
     editor.onDidAttemptReadOnlyEdit(() => canChangeRef.current());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, () => setSearchOpen(true));
     editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => void formatRef.current());
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveShortcutRef.current());
+    editor.onDidChangeCursorPosition((event) =>
+      setCursor({ line: event.position.lineNumber, column: event.position.column }),
+    );
   };
 
   const canRun = activePath !== null && runLanguage(activePath) !== null;
@@ -847,6 +883,18 @@ export function Playground({ slug }: Props) {
           )}
         </aside>
       </main>
+
+      <StatusBar
+        language={activePath ? editorLanguage(activePath) : null}
+        lines={activePath && activePath in project.files ? project.files[activePath].split('\n').length : 0}
+        cursor={activePath ? cursor : null}
+        run={run}
+        saveState={
+          !user ? 'guest' : !slug ? 'local' : !isOwner ? 'other' : hasUnsavedChanges ? 'unsaved' : 'saved'
+        }
+        onShowShortcuts={() => setShortcutsOpen(true)}
+      />
+      {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
     </div>
   );
 }
