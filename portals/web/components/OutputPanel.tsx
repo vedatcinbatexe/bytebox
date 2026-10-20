@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { parseAnsi, stripAnsi } from '@/lib/ansi';
+import { splitLocations, type Location } from '@/lib/errorLocations';
 import type { Run, RunStatus } from '@/lib/runs';
 
 export const STATUS: Record<RunStatus, { label: string; className: string }> = {
@@ -16,6 +17,9 @@ export const STATUS: Record<RunStatus, { label: string; className: string }> = {
 interface Props {
   run: Run | null;
   error: string | null;
+  // Turn "main.py, line 3" in the output into links that open the file at that line
+  filePaths?: string[];
+  onOpenLocation?: (location: Location) => void;
 }
 
 // Queued or running: the run hasn't finished yet
@@ -23,8 +27,16 @@ export function isFinished(status: RunStatus): boolean {
   return status !== 'QUEUED' && status !== 'RUNNING';
 }
 
+interface AnsiTextProps {
+  text: string;
+  className: string;
+  filePaths?: string[];
+  onOpenLocation?: (location: Location) => void;
+}
+
 // Program output, with ANSI colors (e.g. \x1b[32m) shown as real colors
-export function AnsiText({ text, className }: { text: string; className: string }) {
+// and file locations as links when onOpenLocation is given
+export function AnsiText({ text, className, filePaths = [], onOpenLocation }: AnsiTextProps) {
   return (
     <pre className={`whitespace-pre-wrap ${className}`}>
       {parseAnsi(text).map((segment, index) => (
@@ -33,7 +45,22 @@ export function AnsiText({ text, className }: { text: string; className: string 
           style={segment.color ? { color: segment.color } : undefined}
           className={segment.bold ? 'font-bold' : undefined}
         >
-          {segment.text}
+          {onOpenLocation
+            ? splitLocations(segment.text, filePaths).map((piece, pieceIndex) =>
+                piece.location ? (
+                  <button
+                    key={pieceIndex}
+                    onClick={() => onOpenLocation(piece.location!)}
+                    title={`Open ${piece.location.path} at line ${piece.location.line}`}
+                    className="underline decoration-dotted underline-offset-2 hover:text-accent"
+                  >
+                    {piece.text}
+                  </button>
+                ) : (
+                  piece.text
+                ),
+              )
+            : segment.text}
         </span>
       ))}
     </pre>
@@ -45,7 +72,7 @@ function plainOutput(run: Run): string {
   return stripAnsi([run.stdout, run.stderr].filter(Boolean).join('\n'));
 }
 
-export function OutputPanel({ run, error }: Props) {
+export function OutputPanel({ run, error, filePaths, onOpenLocation }: Props) {
   const [copied, setCopied] = useState(false);
   const hasOutput = run !== null && isFinished(run.status) && Boolean(run.stdout || run.stderr);
 
@@ -107,8 +134,12 @@ export function OutputPanel({ run, error }: Props) {
         {run && run.status === 'QUEUED' && <p className="text-subtle">Waiting for output…</p>}
         {run && run.status !== 'QUEUED' && (
           <>
-            {run.stdout && <AnsiText text={run.stdout} className="text-fg" />}
-            {run.stderr && <AnsiText text={run.stderr} className="text-danger" />}
+            {run.stdout && (
+              <AnsiText text={run.stdout} className="text-fg" filePaths={filePaths} onOpenLocation={onOpenLocation} />
+            )}
+            {run.stderr && (
+              <AnsiText text={run.stderr} className="text-danger" filePaths={filePaths} onOpenLocation={onOpenLocation} />
+            )}
             {!run.stdout && !run.stderr && isFinished(run.status) && <p className="text-subtle">No output.</p>}
             {run.status === 'RUNNING' && <span className="inline-block animate-pulse text-accent">▋</span>}
             {run.truncated && (
