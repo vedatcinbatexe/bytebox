@@ -11,6 +11,8 @@ import { SearchPanel } from './SearchPanel';
 import { ResizeHandle } from './ResizeHandle';
 import { StatusBar } from './StatusBar';
 import { ShortcutsDialog } from './ShortcutsDialog';
+import { CommandPalette, type Command } from './CommandPalette';
+import { THEMES, setTheme } from '@/lib/theme';
 import { DEFAULT_SIZES, clampSize, loadSizes, saveSizes, type PanelSizes } from '@/lib/layout';
 import { htmlFiles } from '@/lib/preview';
 import { downloadZip } from '@/lib/zip';
@@ -120,6 +122,7 @@ export function Playground({ slug }: Props) {
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [cursor, setCursor] = useState<{ line: number; column: number } | null>(null);
   const [asideTab, setAsideTab] = useState<'output' | 'preview'>('output');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -295,6 +298,11 @@ export function Playground({ slug }: Props) {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setPaletteOpen(true);
+        return;
+      }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault(); // not the browser's "Save page"
         saveShortcutRef.current();
@@ -309,6 +317,58 @@ export function Playground({ slug }: Props) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // ---------- Command palette ----------
+
+  function paletteCommands(): Command[] {
+    const action = (id: string, label: string, run: () => void, hint?: string): Command => ({
+      id,
+      label,
+      group: 'Action',
+      run,
+      hint,
+    });
+    const commands: Command[] = Object.keys(project.files)
+      .sort()
+      .map((path) => ({ id: `file:${path}`, label: path, group: 'File' as const, run: () => openFile(path) }));
+
+    if (isHtmlOpen) commands.push(action('preview', `Preview ${activePath}`, () => setAsideTab('preview')));
+    else if (canRun) commands.push(action('run', `Run ${activePath}`, () => void runActiveFile(), '⌘↵'));
+    if (activePath && canFormat(activePath)) {
+      commands.push(action('format', `Format ${activePath}`, () => void formatActiveFile(), '⇧⌥F'));
+    }
+    commands.push(
+      action('search', 'Find in files', () => setSearchOpen(true), '⌘⇧F'),
+      action('terminal', terminalOpen ? 'Hide terminal' : 'Open terminal', () =>
+        terminalOpen ? setTerminalOpen(false) : canChange() && setTerminalOpen(true),
+      ),
+      action('new-file', 'New file', newFile),
+      action('new-folder', 'New folder', newFolder),
+      action('zip', 'Download as .zip', () => downloadZip(currentInput().project, title)),
+    );
+    if (pages.length > 0) {
+      commands.push(
+        action('show-preview', 'Show preview', () => setAsideTab('preview')),
+        action('show-output', 'Show output', () => setAsideTab('output')),
+      );
+    }
+    if (!slug) commands.push(action('share', 'Share (save and get a link)', () => void share()));
+    if (slug && isOwner) commands.push(action('save', 'Save', () => void saveChanges(), '⌘S'));
+    if (slug) commands.push(action('fork', 'Fork (make your own copy)', () => void fork()));
+    commands.push(
+      action('shortcuts', 'Keyboard shortcuts', () => setShortcutsOpen(true), '?'),
+      action('commands-help', 'Terminal commands help', () => setHelpOpen(true)),
+      ...THEMES.map((theme) => ({
+        id: `theme:${theme.id}`,
+        label: `${theme.name} theme`,
+        group: 'Theme' as const,
+        run: () => setTheme(theme.id),
+      })),
+      { id: 'go:projects', label: 'My projects', group: 'Go to', run: () => router.push('/projects') },
+      { id: 'go:runs', label: 'Run history', group: 'Go to', run: () => router.push('/runs') },
+    );
+    return commands;
+  }
 
   // ---------- Formatting ----------
 
@@ -528,6 +588,7 @@ export function Playground({ slug }: Props) {
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, () => setSearchOpen(true));
     editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => void formatRef.current());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveShortcutRef.current());
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => setPaletteOpen(true));
     editor.onDidChangeCursorPosition((event) =>
       setCursor({ line: event.position.lineNumber, column: event.position.column }),
     );
@@ -895,6 +956,7 @@ export function Playground({ slug }: Props) {
         onShowShortcuts={() => setShortcutsOpen(true)}
       />
       {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+      {paletteOpen && <CommandPalette commands={paletteCommands()} onClose={() => setPaletteOpen(false)} />}
     </div>
   );
 }
