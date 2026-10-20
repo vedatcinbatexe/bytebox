@@ -40,3 +40,38 @@ export function splitLocations(text: string, paths: string[]): OutputPiece[] {
 export function findLocations(text: string, paths: string[]): Location[] {
   return splitLocations(text, paths).flatMap((piece) => (piece.location ? [piece.location] : []));
 }
+
+export interface ErrorMarker extends Location {
+  message: string;
+}
+
+// The line that says what went wrong, e.g. "ZeroDivisionError: division by zero" or "error[E0308]: mismatched types"
+function summaryLine(lines: string[], paths: string[]): string {
+  const summary = lines.find(
+    (line) => /\w*(Error|Exception)\b|^error\b/.test(line.trim()) && findLocations(line, paths).length === 0,
+  );
+  return summary?.trim() ?? 'Error (see the output)';
+}
+
+// Error markers for the editor: one per file and line mentioned in the error output
+export function errorMarkers(stderr: string, paths: string[]): ErrorMarker[] {
+  const lines = stderr.split('\n');
+  const summary = summaryLine(lines, paths);
+  const markers: ErrorMarker[] = [];
+  for (const line of lines) {
+    const pieces = splitLocations(line, paths);
+    pieces.forEach((piece, index) => {
+      if (!piece.location) return;
+      if (markers.some((marker) => marker.path === piece.location!.path && marker.line === piece.location!.line)) return;
+      // Compilers put the message after the location ("main.cpp:2:11: error: expected …")
+      const rest = pieces
+        .slice(index + 1)
+        .map((next) => next.text)
+        .join('')
+        .replace(/^[:\s]+/, '');
+      const ownMessage = rest.length > 3 && !rest.startsWith(', in ') && !rest.startsWith(')');
+      markers.push({ ...piece.location, message: ownMessage ? rest : summary });
+    });
+  }
+  return markers.slice(0, 20);
+}
