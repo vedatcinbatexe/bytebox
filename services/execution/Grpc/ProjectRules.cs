@@ -14,6 +14,8 @@ public static partial class ProjectRules
     {
         [".py"] = "python",
         [".js"] = "javascript",
+        [".ts"] = "typescript",
+        [".java"] = "java",
         [".cpp"] = "cpp",
     };
 
@@ -44,7 +46,7 @@ public static partial class ProjectRules
         if (request.Files.All(file => file.Path != request.EntryFile))
             return $"Entry file not found: {request.EntryFile}";
         if (LanguageFor(request.EntryFile) is null)
-            return "Only .py, .js and .cpp files can be run";
+            return "Only .py, .js, .ts, .java and .cpp files can be run";
         return null;
     }
 }

@@ -92,3 +92,34 @@ def test_missing_entry_file_is_rejected():
     result = run_project("python", files(**{"main.py": "print(1)"}), "other.py")
     assert result["status"] == "failed"
     assert "Entry file not found" in result["stderr"]
+
+
+def test_typescript_runs_with_imports():
+    project = files(
+        **{
+            "main.ts": 'import { greet } from "./lib/greet.ts";\ninterface User { name: string }\nconst user: User = { name: "TS" };\nconsole.log(greet(user.name));',
+            "lib/greet.ts": "export function greet(name: string): string {\n  return `Hello, ${name}!`;\n}",
+        }
+    )
+    result = run_project("typescript", project, "main.ts")
+    assert result["status"] == "completed", result
+    assert result["stdout"] == "Hello, TS!\n"
+    assert result["stderr"] == ""
+
+
+def test_java_runs_with_other_classes_and_stdin():
+    project = files(
+        **{
+            "Main.java": 'import java.util.Scanner;\n\npublic class Main {\n    public static void main(String[] args) {\n        String name = new Scanner(System.in).nextLine();\n        System.out.println(Greeter.greet(name));\n    }\n}',
+            "Greeter.java": 'public class Greeter {\n    static String greet(String name) {\n        return "Hello, " + name + "!";\n    }\n}',
+        }
+    )
+    result = run_project("java", project, "Main.java", "Java")
+    assert result["status"] == "completed", result
+    assert result["stdout"] == "Hello, Java!\n"
+
+
+def test_java_compile_error_is_reported():
+    result = run_project("java", files(**{"Main.java": "public class Main { void broken( }"}), "Main.java")
+    assert result["exitCode"] != 0
+    assert "error" in result["stderr"]

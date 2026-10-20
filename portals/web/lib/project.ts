@@ -17,7 +17,13 @@ export interface TreeNode {
 export const MAX_FILES = 50;
 const SAFE_PATH = /^[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)*$/;
 
-const RUNNABLE: Record<string, string> = { '.py': 'python', '.js': 'javascript', '.cpp': 'cpp' };
+const RUNNABLE: Record<string, string> = {
+  '.py': 'python',
+  '.js': 'javascript',
+  '.ts': 'typescript',
+  '.java': 'java',
+  '.cpp': 'cpp',
+};
 const EDITOR_LANGUAGES: Record<string, string> = {
   ...RUNNABLE,
   '.h': 'cpp',

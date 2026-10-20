@@ -177,6 +177,19 @@ sequenceDiagram
 
 ---
 
+### Supported languages
+
+| Language | Extension | Sandbox image | Time / memory |
+|---|---|---|---|
+| Python | `.py` | `python:3.13-slim` | 5 s / 128 MB |
+| JavaScript | `.js` | `node:24-alpine` | 5 s / 128 MB |
+| TypeScript | `.ts` | `node:24-alpine` (types stripped by Node 24) | 5 s / 128 MB |
+| Java | `.java` | `eclipse-temurin:25-jdk-alpine` (runs from source; other classes in the project are found automatically) | 10 s / 256 MB |
+| C++ | `.cpp` | `bytebox/sandbox-cpp` (Alpine + g++) | 10 s / 256 MB |
+| HTML/CSS/JS | `.html` | — (live preview in the browser) | — |
+
+> Go was considered but left out: every run starts with an empty build cache, and compiling Go's standard library on half a CPU takes ~10 s. It needs a pre-warmed cache image first.
+
 ## 5. Sandbox Security Model
 
 Running untrusted code is the core risk. Every run gets a **fresh, single-use container**:
