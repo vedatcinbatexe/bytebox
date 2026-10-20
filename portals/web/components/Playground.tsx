@@ -9,6 +9,7 @@ import { OutputPanel, isFinished } from './OutputPanel';
 import { MarkdownPanel } from './MarkdownPanel';
 import { PreviewPanel } from './PreviewPanel';
 import { ProjectTags } from './ProjectTags';
+import { EditorSettingsDialog } from './EditorSettingsDialog';
 import { TestsPanel } from './TestsPanel';
 import { TESTS_FILE, parseTests, serializeTests } from '@/lib/tests';
 import { SearchPanel } from './SearchPanel';
@@ -20,6 +21,12 @@ import { HistoryPanel } from './HistoryPanel';
 import { EmbedDialog } from './EmbedDialog';
 import { THEMES, setTheme } from '@/lib/theme';
 import { DEFAULT_SIZES, clampSize, loadSizes, saveSizes, type PanelSizes } from '@/lib/layout';
+import {
+  DEFAULT_EDITOR_SETTINGS,
+  loadEditorSettings,
+  saveEditorSettings,
+  type EditorSettings,
+} from '@/lib/editorSettings';
 import { htmlFiles } from '@/lib/preview';
 import { downloadZip } from '@/lib/zip';
 import { canFormat, formatCode } from '@/lib/format';
@@ -155,6 +162,14 @@ export function Playground({ slug }: Props) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [sizes, setSizes] = useState<PanelSizes>(DEFAULT_SIZES);
   useEffect(() => setSizes(loadSizes()), []);
+  const [editorSettings, setEditorSettings] = useState<EditorSettings>(DEFAULT_EDITOR_SETTINGS);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  useEffect(() => setEditorSettings(loadEditorSettings()), []);
+
+  function changeEditorSettings(next: EditorSettings) {
+    setEditorSettings(next);
+    saveEditorSettings(next);
+  }
 
   function resize(panel: keyof PanelSizes, delta: number) {
     setSizes((current) => {
@@ -442,6 +457,7 @@ export function Playground({ slug }: Props) {
     if (slug) commands.push(action('fork', 'Fork (make your own copy)', () => void fork()));
     commands.push(
       action('shortcuts', 'Keyboard shortcuts', () => setShortcutsOpen(true), '?'),
+      action('editor-settings', 'Editor settings (font size, word wrap…)', () => setSettingsOpen(true)),
       action('commands-help', 'Terminal commands help', () => setHelpOpen(true)),
       ...THEMES.map((theme) => ({
         id: `theme:${theme.id}`,
@@ -1049,8 +1065,11 @@ export function Playground({ slug }: Props) {
                 beforeMount={(monaco) => applyMonacoTheme(monaco, theme)}
                 theme={MONACO_THEME}
                 options={{
-                  fontSize: 14,
-                  minimap: { enabled: false },
+                  fontSize: editorSettings.fontSize,
+                  tabSize: editorSettings.tabSize,
+                  wordWrap: editorSettings.wordWrap ? 'on' : 'off',
+                  minimap: { enabled: editorSettings.minimap },
+                  lineNumbers: editorSettings.lineNumbers ? 'on' : 'off',
                   scrollBeyondLastLine: false,
                   readOnly: !user,
                   readOnlyMessage: { value: 'Log in to edit' },
@@ -1155,7 +1174,15 @@ export function Playground({ slug }: Props) {
           !user ? 'guest' : !slug ? 'local' : !isOwner ? 'other' : hasUnsavedChanges ? 'unsaved' : 'saved'
         }
         onShowShortcuts={() => setShortcutsOpen(true)}
+        onShowSettings={() => setSettingsOpen(true)}
       />
+      {settingsOpen && (
+        <EditorSettingsDialog
+          settings={editorSettings}
+          onChange={changeEditorSettings}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
       {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
       {embedOpen && slug && <EmbedDialog slug={slug} onClose={() => setEmbedOpen(false)} />}
       {historyOpen && slug && (
