@@ -96,3 +96,10 @@ def test_containers_are_removed():
     run_code("python", "print('bye')")
     leftovers = sandbox.client.containers.list(all=True, filters={"label": "bytebox=sandbox"})
     assert leftovers == []
+
+
+def test_leftover_containers_are_removed():
+    leftover = sandbox.client.containers.create("python:3.13-slim", "true", labels={"bytebox": "sandbox"})
+    assert sandbox.remove_leftover_containers(max_age_seconds=0) >= 1
+    remaining = [c.id for c in sandbox.client.containers.list(all=True, filters={"label": "bytebox=sandbox"})]
+    assert leftover.id not in remaining

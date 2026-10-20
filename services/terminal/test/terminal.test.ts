@@ -28,7 +28,10 @@ const PROJECT: ProjectFile[] = [
 ];
 
 // A connected terminal with helpers to type commands and wait for output
-async function openTerminal(files = PROJECT, userId = 'test-user') {
+// A fresh user per test run, so the sessions-per-hour limit doesn't build up across runs
+const TEST_USER = `test-user-${process.pid}`;
+
+async function openTerminal(files = PROJECT, userId = TEST_USER) {
   const ws = new WebSocket(URL, { origin: ORIGIN, headers: { cookie: await sessionCookie(userId) } });
   const messages: ServerMessage[] = [];
   let output = '';

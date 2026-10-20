@@ -40,7 +40,6 @@ const SECONDARY_BUTTON =
   'rounded border border-line-strong px-2.5 py-1.5 text-sm text-fg hover:bg-raised disabled:cursor-not-allowed disabled:opacity-50';
 
 const ERROR_MESSAGES: Record<string, string> = {
-  RATE_LIMITED: 'Too many runs. Please wait a minute and try again.',
   FORBIDDEN: 'Only the owner can save this project. Fork it to make your own copy.',
   NETWORK_ERROR: 'Cannot reach the Bytebox API. Is the gateway running?',
 };
