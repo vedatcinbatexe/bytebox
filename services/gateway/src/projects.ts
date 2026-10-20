@@ -74,6 +74,36 @@ export function getProject(slug: string): Promise<Project | null> {
   return call<Project>('GET', `/projects/${encodeURIComponent(slug)}`);
 }
 
+export interface VersionSummary {
+  id: string;
+  title: string;
+  fileCount: number;
+  savedAt: string;
+}
+
+export interface Version extends ProjectInput {
+  id: string;
+  savedAt: string;
+}
+
+export async function listVersions(slug: string, userId: string): Promise<VersionSummary[]> {
+  return (await call<VersionSummary[]>('GET', `/projects/${encodeURIComponent(slug)}/versions`, { userId })) ?? [];
+}
+
+export function getVersion(slug: string, id: string, userId: string): Promise<Version | null> {
+  return call<Version>('GET', `/projects/${encodeURIComponent(slug)}/versions/${encodeURIComponent(id)}`, { userId });
+}
+
+export async function restoreVersion(slug: string, id: string, userId: string): Promise<Project> {
+  const restored = await call<Project>(
+    'POST',
+    `/projects/${encodeURIComponent(slug)}/versions/${encodeURIComponent(id)}/restore`,
+    { userId },
+  );
+  if (!restored) throw new GraphQLError('Version not found', { extensions: { code: 'NOT_FOUND' } });
+  return restored;
+}
+
 export function listMyProjects(userId: string): Promise<ProjectSummary[] | null> {
   return call<ProjectSummary[]>('GET', '/projects', { userId });
 }

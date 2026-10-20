@@ -109,3 +109,49 @@ def test_only_the_owner_can_rename(client):
     assert response.status_code == 200
     assert response.json()["title"] == "New name"
     assert response.json()["files"] == PROJECT["files"]  # files untouched
+
+
+def save(client, slug, title, user=ALICE):
+    body = {**PROJECT, "title": title, "files": [{"path": "main.py", "content": f"print('{title}')"}]}
+    response = client.put(f"/projects/{slug}", json=body, headers=user)
+    assert response.status_code == 200, response.text
+
+
+def test_every_save_keeps_the_previous_version(client):
+    slug = create(client)["slug"]
+    save(client, slug, "v2")
+    save(client, slug, "v3")
+
+    versions = client.get(f"/projects/{slug}/versions", headers=ALICE).json()
+    assert [v["title"] for v in versions] == ["v2", "Greeter"]  # newest first; current (v3) isn't a version
+    first = client.get(f"/projects/{slug}/versions/{versions[1]['id']}", headers=ALICE).json()
+    assert first["files"] == PROJECT["files"]
+
+
+def test_restore_brings_back_a_version_and_keeps_the_current_one(client):
+    slug = create(client)["slug"]
+    save(client, slug, "v2")
+    original = client.get(f"/projects/{slug}/versions", headers=ALICE).json()[0]
+
+    restored = client.post(f"/projects/{slug}/versions/{original['id']}/restore", headers=ALICE).json()
+    assert restored["title"] == "Greeter"
+    assert restored["files"] == PROJECT["files"]
+    titles = [v["title"] for v in client.get(f"/projects/{slug}/versions", headers=ALICE).json()]
+    assert titles[0] == "v2"  # the replaced version is in history
+
+
+def test_versions_are_only_for_the_owner(client):
+    slug = create(client)["slug"]
+    save(client, slug, "v2")
+    version_id = client.get(f"/projects/{slug}/versions", headers=ALICE).json()[0]["id"]
+    assert client.get(f"/projects/{slug}/versions", headers=BOB).status_code == 403
+    assert client.get(f"/projects/{slug}/versions/{version_id}", headers=BOB).status_code == 403
+    assert client.post(f"/projects/{slug}/versions/{version_id}/restore", headers=BOB).status_code == 403
+    assert client.get(f"/projects/{slug}/versions/not-an-id", headers=ALICE).status_code == 404
+
+
+def test_only_the_last_30_versions_are_kept(client):
+    slug = create(client)["slug"]
+    for number in range(35):
+        save(client, slug, f"v{number}")
+    assert len(client.get(f"/projects/{slug}/versions", headers=ALICE).json()) == 30

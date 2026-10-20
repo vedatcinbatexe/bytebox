@@ -15,7 +15,10 @@ import { isRateLimited } from './rateLimit.js';
 import {
   createProject,
   deleteProject,
+  getVersion,
+  listVersions,
   renameProject,
+  restoreVersion,
   getProject,
   listMyProjects,
   updateProject,
@@ -66,6 +69,10 @@ const typeDefs = /* GraphQL */ `
     myProjects: [ProjectSummary!]!
     "Runs of the signed-in user, newest first"
     myRuns(limit: Int = 20): [Run!]!
+    "Earlier versions of a project you own, newest first"
+    projectVersions(slug: String!): [ProjectVersion!]!
+    "One earlier version with its files"
+    projectVersion(slug: String!, id: ID!): ProjectVersionContent
   }
 
   type Mutation {
@@ -78,6 +85,8 @@ const typeDefs = /* GraphQL */ `
     renameProject(slug: String!, title: String!): Project!
     "Delete a project you own (cannot be undone)"
     deleteProject(slug: String!): Boolean!
+    "Make an earlier version the current one (the current one is kept in history)"
+    restoreProjectVersion(slug: String!, id: ID!): Project!
   }
 
   type User {
@@ -85,6 +94,22 @@ const typeDefs = /* GraphQL */ `
     login: String!
     name: String!
     avatarUrl: String!
+  }
+
+  type ProjectVersion {
+    id: ID!
+    title: String!
+    fileCount: Int!
+    savedAt: String!
+  }
+
+  type ProjectVersionContent {
+    id: ID!
+    title: String!
+    files: [ProjectFile!]!
+    folders: [String!]!
+    stdin: String!
+    savedAt: String!
   }
 
   type ProjectSummary {
@@ -227,6 +252,9 @@ export const schema = createSchema<Context>({
       project: (_, { slug }: { slug: string }) => getProject(slug),
       me: (_, __, { user }) => user,
       myProjects: async (_, __, { user }) => (user ? ((await listMyProjects(user.id)) ?? []) : []),
+      projectVersions: (_, { slug }: { slug: string }, { user }) => listVersions(slug, requireUser(user).id),
+      projectVersion: (_, { slug, id }: { slug: string; id: string }, { user }) =>
+        getVersion(slug, id, requireUser(user).id),
       myRuns: async (_, { limit }: { limit: number }, { user }) => {
         if (!user) return [];
         try {
@@ -257,6 +285,12 @@ export const schema = createSchema<Context>({
         const signedIn = requireUser(user);
         await limitSaves(signedIn.id);
         return renameProject(slug, title, signedIn.id);
+      },
+
+      restoreProjectVersion: async (_, { slug, id }: { slug: string; id: string }, { user }) => {
+        const signedIn = requireUser(user);
+        await limitSaves(signedIn.id);
+        return restoreVersion(slug, id, signedIn.id);
       },
 
       deleteProject: async (_, { slug }: { slug: string }, { user }) => {

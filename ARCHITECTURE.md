@@ -500,6 +500,7 @@ flowchart LR
 - [x] Gateway: `me`, `myProjects`, `Project.ownedByMe`; runs stored with the user id; 60 runs/minute per user
 - [x] **Web:** profile section (avatar, name, My projects, Sign out) or **Log in**; `/login` page (Continue with GitHub, error messages); **"Login or sign up before making changes"** modal for guests on run, edit, terminal, new/rename/delete, stdin, share, save, fork; read-only editor for guests; **My projects** page at `/projects`
 - [x] **Create workspace** (profile menu and My projects): pick a **template** (Blank JavaScript `init.js` "hello world", Python basics, Python data, Node.js app, C++ project, Algorithms), give it a name, and it opens ready to run
+- [x] **Version history:** every save, rename and restore keeps the previous version (`project_versions` in MongoDB, last 30 per project); owners open 🕘 History to browse a version's files and restore it (`projectVersions`, `projectVersion`, `restoreProjectVersion`)
 - [x] **Drag & drop** in the file tree: drop files/folders on a folder or on empty space (project root); refuses moving a folder into itself and name clashes; open tabs follow
 - [x] **Command palette** (⌘/Ctrl + K): fuzzy search over every file and action (run, format, find, terminal, preview, zip, share/save/fork, new file/folder, themes, shortcuts, My projects, Run history); ↑/↓ and Enter
 - [x] **Status bar:** language, cursor position, line count, last run status and time, save state; **⌘/Ctrl + S** saves your own project; **?** or ⌨ Shortcuts opens the keyboard shortcuts list

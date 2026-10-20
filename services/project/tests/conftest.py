@@ -17,5 +17,7 @@ from app.main import app  # noqa: E402
 @pytest.fixture
 def client():
     db.projects.delete_many({})
+    db.versions.delete_many({})
     yield TestClient(app)
     db.projects.delete_many({})
+    db.versions.delete_many({})

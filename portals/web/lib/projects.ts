@@ -98,6 +98,37 @@ export async function deleteProject(slug: string): Promise<void> {
   await request(`mutation Delete($slug: String!) { deleteProject(slug: $slug) }`, { slug });
 }
 
+export interface VersionSummary {
+  id: string;
+  title: string;
+  fileCount: number;
+  savedAt: string;
+}
+
+export async function fetchVersions(slug: string): Promise<VersionSummary[]> {
+  const data = await request<{ projectVersions: VersionSummary[] }>(
+    `query Versions($slug: String!) { projectVersions(slug: $slug) { id title fileCount savedAt } }`,
+    { slug },
+  );
+  return data.projectVersions;
+}
+
+export async function fetchVersionFiles(slug: string, id: string): Promise<Record<string, string>> {
+  const data = await request<{ projectVersion: { files: { path: string; content: string }[] } | null }>(
+    `query Version($slug: String!, $id: ID!) { projectVersion(slug: $slug, id: $id) { files { path content } } }`,
+    { slug, id },
+  );
+  return Object.fromEntries((data.projectVersion?.files ?? []).map((file) => [file.path, file.content]));
+}
+
+export async function restoreVersion(slug: string, id: string): Promise<SavedProject> {
+  const data = await request<{ restoreProjectVersion: ApiProject }>(
+    `mutation Restore($slug: String!, $id: ID!) { restoreProjectVersion(slug: $slug, id: $id) { ${PROJECT_FIELDS} } }`,
+    { slug, id },
+  );
+  return fromApi(data.restoreProjectVersion);
+}
+
 export async function fetchMyProjects(): Promise<ProjectSummary[]> {
   const data = await request<{ myProjects: ProjectSummary[] }>(
     '{ myProjects { slug title fileCount updatedAt } }',
