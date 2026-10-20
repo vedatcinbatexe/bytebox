@@ -8,6 +8,7 @@ import { FileTree } from './FileTree';
 import { OutputPanel, isFinished } from './OutputPanel';
 import { PreviewPanel } from './PreviewPanel';
 import { htmlFiles } from '@/lib/preview';
+import { downloadZip } from '@/lib/zip';
 import { TerminalPanel } from './TerminalPanel';
 import { CommandsHelp } from './CommandsHelp';
 import { LoginRequiredModal } from './LoginRequiredModal';
@@ -452,8 +453,15 @@ export function Playground({ slug }: Props) {
           <span className={`text-xs ${notice.isError ? 'text-danger' : 'text-success'}`}>{notice.text}</span>
         )}
 
-        {/* Project: share / save / copy link / fork */}
+        {/* Project: share / save / copy link / fork / download */}
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => downloadZip(currentInput().project, title)}
+            className={SECONDARY_BUTTON}
+            title="Download all files as a .zip"
+          >
+            ⤓ .zip
+          </button>
           {!slug && (
             <button onClick={share} disabled={busy} className={SECONDARY_BUTTON} title="Save and get a link">
               {busy ? 'Sharing…' : '↗ Share'}

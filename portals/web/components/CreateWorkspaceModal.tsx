@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createProject } from '@/lib/projects';
 import { WORKSPACE_TEMPLATES } from '@/lib/templates';
+import { projectFromZip, type ImportedZip } from '@/lib/zip';
 
 interface Props {
   onClose: () => void;
@@ -15,6 +16,7 @@ export function CreateWorkspaceModal({ onClose }: Props) {
   const [template, setTemplate] = useState(WORKSPACE_TEMPLATES[0]);
   const [name, setName] = useState('');
   const [nameEdited, setNameEdited] = useState(false);
+  const [imported, setImported] = useState<ImportedZip | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,6 +27,22 @@ export function CreateWorkspaceModal({ onClose }: Props) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose, creating]);
+
+  async function importZip(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    try {
+      const result = projectFromZip(new Uint8Array(await file.arrayBuffer()));
+      if (Object.keys(result.project.files).length === 0) {
+        setError('No usable text files found in this .zip.');
+        return;
+      }
+      setImported(result);
+      if (!nameEdited) setName(file.name.replace(/\.zip$/i, ''));
+    } catch {
+      setError('That file is not a valid .zip.');
+    }
+  }
 
   async function create(event: React.FormEvent) {
     event.preventDefault();
@@ -39,8 +57,8 @@ export function CreateWorkspaceModal({ onClose }: Props) {
     try {
       const created = await createProject({
         title,
-        project: { files: template.files, folders: [] },
-        stdin: template.stdin ?? '',
+        project: imported ? imported.project : { files: template.files, folders: [] },
+        stdin: imported ? '' : (template.stdin ?? ''),
       });
       router.push(`/p/${created.slug}`);
     } catch (createError) {
@@ -70,7 +88,7 @@ export function CreateWorkspaceModal({ onClose }: Props) {
 
         <div role="radiogroup" aria-label="Template" className="mb-5 grid gap-2 sm:grid-cols-2">
           {WORKSPACE_TEMPLATES.map((item) => {
-            const selected = item.id === template.id;
+            const selected = !imported && item.id === template.id;
             return (
               <button
                 key={item.id}
@@ -78,6 +96,7 @@ export function CreateWorkspaceModal({ onClose }: Props) {
                 role="radio"
                 aria-checked={selected}
                 onClick={() => {
+                  setImported(null);
                   setTemplate(item);
                   if (!nameEdited) setName(item.id === 'blank-js' ? '' : item.name);
                 }}
@@ -98,6 +117,31 @@ export function CreateWorkspaceModal({ onClose }: Props) {
               </button>
             );
           })}
+        </div>
+
+        <div className={`mb-5 rounded-lg border border-dashed p-3 text-sm ${imported ? 'border-accent bg-accent/10' : 'border-line-strong'}`}>
+          <label className="flex cursor-pointer items-center gap-2 text-muted hover:text-fg">
+            <span aria-hidden="true">📦</span>
+            <span>{imported ? 'Imported from .zip' : 'Or import a .zip from your computer'}</span>
+            <input
+              type="file"
+              accept=".zip,application/zip"
+              aria-label="Import a .zip file"
+              className="sr-only"
+              onChange={(event) => importZip(event.target.files?.[0])}
+            />
+          </label>
+          {imported && (
+            <p className="mt-1 text-xs text-muted">
+              {Object.keys(imported.project.files).length} files ready
+              {imported.skipped.length > 0 && (
+                <span title={imported.skipped.join('\n')} className="text-warning">
+                  {' '}
+                  · {imported.skipped.length} skipped (hover for details)
+                </span>
+              )}
+            </p>
+          )}
         </div>
 
         <label htmlFor="workspace-name" className="mb-1 block text-xs font-semibold tracking-wide text-muted uppercase">
