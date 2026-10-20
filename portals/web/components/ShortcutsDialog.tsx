@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 
 const SHORTCUTS: { keys: string; action: string }[] = [
+  { keys: '⌘/Ctrl + K', action: 'Command palette (files and actions)' },
   { keys: '⌘/Ctrl + Enter', action: 'Run the open file' },
   { keys: '⌘/Ctrl + S', action: 'Save (your own projects)' },
   { keys: 'Shift + Alt + F', action: 'Format the open file' },
