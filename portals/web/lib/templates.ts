@@ -288,3 +288,73 @@ console.log('Page loaded');
 `,
   },
 });
+
+WORKSPACE_TEMPLATES.push(
+  {
+    id: 'typescript',
+    name: 'TypeScript',
+    description: 'Types, interfaces and imports, run directly by Node.js.',
+    icon: '🔷',
+    files: {
+      'main.ts': `import { average, type Score } from './lib/scores.ts';
+
+const scores: Score[] = [
+  { player: 'Ada', points: 92 },
+  { player: 'Linus', points: 78 },
+  { player: 'Grace', points: 88 },
+];
+
+for (const { player, points } of scores) {
+  console.log(\`\${player.padEnd(6)} \${points}\`);
+}
+console.log(\`Average: \${average(scores).toFixed(1)}\`);
+`,
+      'lib/scores.ts': `export interface Score {
+  player: string;
+  points: number;
+}
+
+export function average(scores: Score[]): number {
+  return scores.reduce((total, score) => total + score.points, 0) / scores.length;
+}
+`,
+    },
+  },
+  {
+    id: 'java',
+    name: 'Java',
+    description: 'A Main class using a second class, with input.',
+    icon: '☕',
+    stdin: 'Duke',
+    files: {
+      'Main.java': `import java.util.Scanner;
+
+public class Main {
+    public static void main(String[] args) {
+        Scanner in = new Scanner(System.in);
+        String name = in.hasNextLine() ? in.nextLine() : "world";
+
+        Counter counter = new Counter();
+        for (int i = 0; i < 3; i++) {
+            counter.increment();
+        }
+        System.out.println("Hello, " + name + "!");
+        System.out.println("Counted to " + counter.value());
+    }
+}
+`,
+      'Counter.java': `public class Counter {
+    private int value;
+
+    public void increment() {
+        value++;
+    }
+
+    public int value() {
+        return value;
+    }
+}
+`,
+    },
+  },
+);

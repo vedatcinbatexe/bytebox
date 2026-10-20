@@ -27,6 +27,8 @@ import type { SessionUser } from './auth.js';
 const languages = [
   { id: 'python', name: 'Python', extension: '.py' },
   { id: 'javascript', name: 'JavaScript', extension: '.js' },
+  { id: 'typescript', name: 'TypeScript', extension: '.ts' },
+  { id: 'java', name: 'Java', extension: '.java' },
   { id: 'cpp', name: 'C++', extension: '.cpp' },
 ];
 
