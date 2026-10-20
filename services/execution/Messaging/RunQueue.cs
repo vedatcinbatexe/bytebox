@@ -20,7 +20,8 @@ public class RunQueue(IConnection connection)
         {
             runId = run.Id,
             language = run.Language,
-            code = run.Code,
+            entryFile = run.EntryFile,
+            files = run.Files.Select(file => new { path = file.Path, content = file.Content }),
             stdin = run.Stdin,
         });
         var properties = new BasicProperties { Persistent = true, ContentType = "application/json" };

@@ -18,6 +18,12 @@ export interface GrpcRun {
   timeMs?: number;
   createdAt: string;
   finishedAt?: string;
+  entryFile?: string;
+}
+
+export interface ProjectFile {
+  path: string;
+  content: string;
 }
 
 const definition = protoLoader.loadSync(protoPath, { keepCase: false, defaults: false });
@@ -35,8 +41,12 @@ function unary<T>(method: string, request: object): Promise<T> {
   });
 }
 
-export async function createRun(language: string, code: string, stdin: string): Promise<string> {
-  const response = await unary<{ runId: string }>('CreateRun', { language, code, stdin });
+export async function createRun(
+  files: ProjectFile[],
+  entryFile: string,
+  stdin: string,
+): Promise<string> {
+  const response = await unary<{ runId: string }>('CreateRun', { files, entryFile, stdin });
   return response.runId;
 }
 

@@ -1,4 +1,3 @@
-using System.Text;
 using Bytebox.Execution.Grpc;
 using Execution.Data;
 using Execution.Messaging;
@@ -13,21 +12,17 @@ namespace Execution.Grpc;
 public class ExecutionGrpcService(ExecutionDb db, RunQueue queue, IConnectionMultiplexer redis)
     : ExecutionService.ExecutionServiceBase
 {
-    private static readonly string[] Languages = ["python", "javascript", "cpp"];
-    private const int MaxCodeBytes = 64 * 1024;
-
     public override async Task<CreateRunResponse> CreateRun(CreateRunRequest request, ServerCallContext context)
     {
-        if (!Languages.Contains(request.Language))
-            throw new RpcException(new Status(StatusCode.InvalidArgument, $"Unsupported language: {request.Language}"));
-        if (Encoding.UTF8.GetByteCount(request.Code) > MaxCodeBytes)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Code is larger than 64 KB"));
+        if (ProjectRules.Validate(request) is string error)
+            throw new RpcException(new Status(StatusCode.InvalidArgument, error));
 
         var run = new Run
         {
             Id = Guid.NewGuid(),
-            Language = request.Language,
-            Code = request.Code,
+            Language = ProjectRules.LanguageFor(request.EntryFile)!,
+            EntryFile = request.EntryFile,
+            Files = request.Files.Select(file => new Data.ProjectFile { Path = file.Path, Content = file.Content }).ToList(),
             Stdin = request.Stdin,
             UserId = string.IsNullOrEmpty(request.UserId) ? null : request.UserId,
             CreatedAt = DateTime.UtcNow,
@@ -92,6 +87,7 @@ public class ExecutionGrpcService(ExecutionDb db, RunQueue queue, IConnectionMul
         {
             Id = run.Id.ToString(),
             Language = run.Language,
+            EntryFile = run.EntryFile,
             Status = run.Status,
             Stdout = run.Stdout,
             Stderr = run.Stderr,

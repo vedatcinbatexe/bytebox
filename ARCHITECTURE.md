@@ -423,13 +423,14 @@ subscription {
 > The browser calls the gateway directly at `NEXT_PUBLIC_GATEWAY_URL` (default `http://localhost:4000/graphql`). It is set as a Docker build argument because Next.js inlines it at build time.
 
 ### Step 5 — Multi-File Projects (files & folders)
-- [ ] **Web:** file explorer on the left — create, rename, delete files and folders; open files in tabs
-- [ ] **Web:** Run executes the **currently open file**; language detected from the extension (`.py`, `.js`, `.cpp`)
-- [ ] **Gateway + execution:** `createRun` takes `files: [{ path, content }]` + `entryFile` instead of a single `code` string (update `execution.proto`)
-- [ ] **Runner:** receive all files as an archive, extract into `/tmp/project`, run the entry file (C++: compile the entry file together with the other `.cpp` files)
-- [ ] Limits: max 50 files, max 256 KB total, safe paths only (no `..`, no absolute paths)
-- [ ] Autosave the whole project in `localStorage`
-- [ ] Tests: imports across files and folders in each language, path traversal rejected, limits enforced
+- [x] **Web:** file explorer on the left — create, rename, delete files and folders; open files in tabs
+- [x] **Web:** Run executes the **currently open file**; language detected from the extension (`.py`, `.js`, `.cpp`)
+- [x] **Gateway + execution:** `createRun` takes `files: [{ path, content }]` + `entryFile` instead of a single `code` string (`execution.proto` updated)
+- [x] **Runner:** receives the project as a tar archive on stdin, extracts it into `/tmp/project`, runs the entry file (C++: compiles the entry file plus every other `.cpp` file without `main()`)
+- [x] Limits: max 50 files, max 256 KB total, safe paths only (no `..`, no absolute paths) — checked in execution and again in the runner
+- [x] Execution service switched to **EF Core migrations** (`Migrations/`, applied on startup)
+- [x] Autosave the whole workspace (files, folders, tabs, stdin) in `localStorage`
+- [x] Tests: imports across files and folders in each language, reading project files, path traversal, limits, missing entry file
 
 ### Step 6 — Project Service & Sharing
 - [ ] Rename `services/snippet` → `services/project`

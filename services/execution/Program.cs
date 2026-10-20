@@ -26,10 +26,10 @@ builder.Services.AddGrpcReflection();
 
 var app = builder.Build();
 
-// Create the tables on startup. Switch to EF migrations once the schema starts changing.
+// Apply EF Core migrations (Migrations/) on startup
 using (var scope = app.Services.CreateScope())
 {
-    await scope.ServiceProvider.GetRequiredService<ExecutionDb>().Database.EnsureCreatedAsync();
+    await scope.ServiceProvider.GetRequiredService<ExecutionDb>().Database.MigrateAsync();
 }
 
 app.MapGrpcService<ExecutionGrpcService>();

@@ -4,7 +4,7 @@ import time
 
 import pika
 
-from sandbox import ensure_images, failed, run_code
+from sandbox import ensure_images, failed, run_project
 
 RABBITMQ_URL = os.environ.get("RABBITMQ_URL", "amqp://guest:guest@localhost:5672")
 REQUEST_QUEUE = "run.requested"
@@ -29,9 +29,14 @@ def on_message(channel, method, properties, body):
         channel.basic_ack(delivery_tag=method.delivery_tag)
         return
 
-    print(f"Running {run_id} ({job.get('language')})", flush=True)
+    print(f"Running {run_id}: {job.get('entryFile')} ({job.get('language')})", flush=True)
     try:
-        result = run_code(job.get("language"), job.get("code", ""), job.get("stdin", ""))
+        result = run_project(
+            job.get("language"),
+            job.get("files", []),
+            job.get("entryFile", ""),
+            job.get("stdin", ""),
+        )
     except Exception as error:  # Docker problems must not crash the runner
         print(f"Run {run_id} failed: {error}", flush=True)
         result = failed("Internal error while running code")
