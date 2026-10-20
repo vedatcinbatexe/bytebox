@@ -1237,6 +1237,7 @@ export function Playground({ slug }: Props) {
                 run={run}
                 error={error}
                 filePaths={Object.keys(project.files)}
+                stdin={stdin}
                 onOpenLocation={(location) => openMatch(location.path, location.line, location.column, 0)}
               />
             </>

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { parseAnsi, stripAnsi } from '@/lib/ansi';
 import { splitLocations, type Location } from '@/lib/errorLocations';
+import { hintFor } from '@/lib/hints';
 import type { Run, RunStatus } from '@/lib/runs';
 
 export const STATUS: Record<RunStatus, { label: string; className: string }> = {
@@ -20,6 +21,8 @@ interface Props {
   // Turn "main.py, line 3" in the output into links that open the file at that line
   filePaths?: string[];
   onOpenLocation?: (location: Location) => void;
+  // The input the program got, for hints like "stdin is empty"
+  stdin?: string;
 }
 
 // Queued or running: the run hasn't finished yet
@@ -72,9 +75,10 @@ function plainOutput(run: Run): string {
   return stripAnsi([run.stdout, run.stderr].filter(Boolean).join('\n'));
 }
 
-export function OutputPanel({ run, error, filePaths, onOpenLocation }: Props) {
+export function OutputPanel({ run, error, filePaths, onOpenLocation, stdin = '' }: Props) {
   const [copied, setCopied] = useState(false);
   const hasOutput = run !== null && isFinished(run.status) && Boolean(run.stdout || run.stderr);
+  const hint = run && isFinished(run.status) ? hintFor(run, stdin) : null;
 
   async function copy() {
     try {
@@ -144,6 +148,11 @@ export function OutputPanel({ run, error, filePaths, onOpenLocation }: Props) {
             {run.status === 'RUNNING' && <span className="inline-block animate-pulse text-accent">▋</span>}
             {run.truncated && (
               <p className="mt-3 text-xs text-warning">Output was cut off at 64 KB.</p>
+            )}
+            {hint && (
+              <p className="mt-3 rounded border border-info/30 bg-info/10 px-3 py-2 font-sans text-xs text-info">
+                💡 {hint}
+              </p>
             )}
           </>
         )}
