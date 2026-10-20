@@ -183,3 +183,16 @@ def test_owner_login_is_stored_for_explore(client):
     client.patch(f"/projects/{slug}", json={"visibility": "public"}, headers=ALICE)
     assert client.get("/explore").json()[0]["ownerLogin"] == "alice"
     assert client.patch(f"/projects/{slug}", json={"visibility": "secret"}, headers=ALICE).status_code == 422
+
+
+def test_profile_lists_only_public_projects_of_that_user(client):
+    alice = {**ALICE, "X-User-Login": "Alice"}
+    public = create(client, user=alice)["slug"]
+    create(client, user=alice)  # unlisted
+    bob_public = create(client, user={**BOB, "X-User-Login": "bob"})["slug"]
+    for slug, user in ((public, ALICE), (bob_public, BOB)):
+        client.patch(f"/projects/{slug}", json={"visibility": "public"}, headers=user)
+
+    assert [p["slug"] for p in client.get("/users/alice/projects").json()] == [public]  # case-insensitive
+    assert client.get("/users/nobody/projects").json() == []
+    assert client.get("/users/a.*/projects").json() == []  # not treated as a pattern

@@ -135,6 +135,7 @@ export function Playground({ slug }: Props) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [visibility, setVisibilityState] = useState<Visibility>('UNLISTED');
+  const [ownerLogin, setOwnerLogin] = useState<string | null>(null);
   const [cursor, setCursor] = useState<{ line: number; column: number } | null>(null);
   const [asideTab, setAsideTab] = useState<'output' | 'preview'>('output');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -189,6 +190,7 @@ export function Playground({ slug }: Props) {
           setSavedSnapshot(snapshot(opened));
           setIsOwner(saved.ownedByMe);
           setVisibilityState(saved.visibility);
+          setOwnerLogin(saved.ownerLogin);
           setLoaded(true);
         })
         .catch((loadError) => showNotice(errorMessage(loadError), true));
@@ -674,6 +676,11 @@ export function Playground({ slug }: Props) {
           aria-label="Project title"
           className="min-w-32 flex-1 rounded border border-transparent bg-transparent px-2 py-1 text-sm text-fg outline-none hover:border-line focus:border-line-strong"
         />
+        {slug && !isOwner && ownerLogin && (
+          <Link href={`/u/${encodeURIComponent(ownerLogin)}`} className="text-xs text-muted hover:text-accent hover:underline">
+            by @{ownerLogin}
+          </Link>
+        )}
         {notice && (
           <span className={`text-xs ${notice.isError ? 'text-danger' : 'text-success'}`}>{notice.text}</span>
         )}

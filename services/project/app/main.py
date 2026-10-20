@@ -1,3 +1,4 @@
+import re
 import secrets
 import string
 from datetime import UTC, datetime
@@ -50,6 +51,17 @@ def health():
 def list_my_projects(user_id: UserId = None):
     owner = require_user(user_id)
     documents = db.projects.find({"owner_id": owner}).sort("updated_at", -1).limit(100)
+    return [summary(document) for document in documents]
+
+
+@app.get("/users/{login}/projects", response_model=list[ProjectSummary])
+def public_projects_of(login: str):
+    """A user's public projects, for their profile page."""
+    documents = (
+        db.projects.find({"visibility": "public", "owner_login": {"$regex": f"^{re.escape(login)}$", "$options": "i"}})
+        .sort("updated_at", -1)
+        .limit(100)
+    )
     return [summary(document) for document in documents]
 
 
