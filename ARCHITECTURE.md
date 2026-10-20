@@ -478,6 +478,7 @@ flowchart LR
   - viewing shared projects stays public
 - [x] Gateway: `me`, `myProjects`, `Project.ownedByMe`; runs stored with the user id; 60 runs/minute per user
 - [x] **Web:** profile section (avatar, name, My projects, Sign out) or **Log in**; `/login` page (Continue with GitHub, error messages); **"Login or sign up before making changes"** modal for guests on run, edit, terminal, new/rename/delete, stdin, share, save, fork; read-only editor for guests; **My projects** page at `/projects`
+- [x] **Create workspace** (profile menu and My projects): asks for a name, creates a workspace with one file `init.js` that prints "hello world", and opens it
 - [ ] Run history page (later)
 
 > Projects made before login was required have no owner: anyone can view and fork them, nobody can save them.
