@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { findLocations, splitLocations } from './errorLocations';
+import { errorMarkers, findLocations, splitLocations } from './errorLocations';
 
 const at = (path: string, line: number, column = 1) => ({ path, line, column });
 
@@ -33,4 +33,22 @@ test('only project files count, and the text is kept whole', () => {
     pieces.filter((piece) => piece.location).map((piece) => piece.location),
     [at('main.py', 5)],
   );
+});
+
+test('error markers use the message on the same line, or the error summary', () => {
+  const python =
+    'Traceback (most recent call last):\n  File "/tmp/project/main.py", line 4, in <module>\n  File "/tmp/project/lib/calc.py", line 3, in average\nZeroDivisionError: division by zero';
+  assert.deepEqual(errorMarkers(python, ['main.py', 'lib/calc.py']), [
+    { ...at('main.py', 4), message: 'ZeroDivisionError: division by zero' },
+    { ...at('lib/calc.py', 3), message: 'ZeroDivisionError: division by zero' },
+  ]);
+
+  const cpp = "main.cpp: In function 'int main()':\nmain.cpp:2:11: error: expected primary-expression\nmain.cpp:2:11: note: again";
+  assert.deepEqual(errorMarkers(cpp, ['main.cpp']), [{ ...at('main.cpp', 2, 11), message: 'error: expected primary-expression' }]);
+
+  const rust = 'error[E0308]: mismatched types\n --> main.rs:2:18\n  |';
+  assert.deepEqual(errorMarkers(rust, ['main.rs']), [{ ...at('main.rs', 2, 18), message: 'error[E0308]: mismatched types' }]);
+
+  const java = 'Exception in thread "main" java.lang.NullPointerException: boom\n\tat Main.main(Main.java:4)';
+  assert.equal(errorMarkers(java, ['Main.java'])[0].message, 'Exception in thread "main" java.lang.NullPointerException: boom');
 });

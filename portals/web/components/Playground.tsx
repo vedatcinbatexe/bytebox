@@ -21,6 +21,7 @@ import { HistoryPanel } from './HistoryPanel';
 import { EmbedDialog } from './EmbedDialog';
 import { THEMES, setTheme } from '@/lib/theme';
 import { DEFAULT_SIZES, clampSize, loadSizes, saveSizes, type PanelSizes } from '@/lib/layout';
+import { errorMarkers, type ErrorMarker } from '@/lib/errorLocations';
 import {
   DEFAULT_EDITOR_SETTINGS,
   loadEditorSettings,
@@ -221,6 +222,8 @@ export function Playground({ slug }: Props) {
   const [run, setRun] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  // Red squiggles from the last failed run
+  const [markers, setMarkers] = useState<ErrorMarker[]>([]);
   const closeSubscription = useRef<(() => void) | null>(null);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
@@ -232,6 +235,27 @@ export function Playground({ slug }: Props) {
   }, [theme]);
 
   const { title, project, openTabs, activePath, stdin } = workspace;
+
+  // Show the markers of the open file in the editor
+  useEffect(() => {
+    const monaco = monacoRef.current;
+    const model = editorRef.current?.getModel();
+    if (!monaco || !model) return;
+    monaco.editor.setModelMarkers(
+      model,
+      'run',
+      markers
+        .filter((marker) => marker.path === activePath)
+        .map((marker) => ({
+          severity: monaco.MarkerSeverity.Error,
+          message: marker.message,
+          startLineNumber: marker.line,
+          startColumn: marker.column,
+          endLineNumber: marker.line,
+          endColumn: model.getLineMaxColumn(Math.min(marker.line, model.getLineCount())),
+        })),
+    );
+  }, [markers, activePath]);
   const hasUnsavedChanges = Boolean(slug) && loaded && snapshot(workspace) !== savedSnapshot;
 
   // Shared project: load it from the API. Local workspace: restore it from localStorage.
@@ -698,6 +722,7 @@ export function Playground({ slug }: Props) {
     setRunning(true);
     setError(null);
     setRun(null);
+    setMarkers([]);
 
     // Read the open file from the editor itself: React state can lag a keystroke behind
     const latest = editorRef.current?.getValue() ?? project.files[activePath];
@@ -715,6 +740,7 @@ export function Playground({ slug }: Props) {
           if (isFinished(updated.status)) {
             closeSubscription.current?.();
             setRunning(false);
+            if (updated.exitCode !== 0) setMarkers(errorMarkers(updated.stderr, Object.keys(project.files)));
           }
         },
         (subscriptionError) => {
