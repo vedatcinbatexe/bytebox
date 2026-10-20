@@ -7,6 +7,7 @@ import Editor, { type OnMount } from '@monaco-editor/react';
 import { FileTree } from './FileTree';
 import { OutputPanel, isFinished } from './OutputPanel';
 import { PreviewPanel } from './PreviewPanel';
+import { SearchPanel } from './SearchPanel';
 import { htmlFiles } from '@/lib/preview';
 import { downloadZip } from '@/lib/zip';
 import { TerminalPanel } from './TerminalPanel';
@@ -114,6 +115,9 @@ export function Playground({ slug }: Props) {
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [asideTab, setAsideTab] = useState<'output' | 'preview'>('output');
+  const [searchOpen, setSearchOpen] = useState(false);
+  // A search result to select once its file is open in the editor
+  const pendingReveal = useRef<{ path: string; line: number; column: number; length: number } | null>(null);
   const [selectedFolder, setSelectedFolder] = useState('');
   const [run, setRun] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -252,6 +256,48 @@ export function Playground({ slug }: Props) {
   function update(changes: Partial<Workspace>) {
     setWorkspace((current) => ({ ...current, ...changes }));
   }
+
+  // ---------- Find in files ----------
+
+  function revealPending() {
+    const target = pendingReveal.current;
+    const editor = editorRef.current;
+    if (!target || !editor || target.path !== activePathRef.current) return;
+    pendingReveal.current = null;
+    // Wait a moment for the editor to switch to the file
+    setTimeout(() => {
+      editor.revealLineInCenter(target.line);
+      editor.setSelection({
+        startLineNumber: target.line,
+        startColumn: target.column,
+        endLineNumber: target.line,
+        endColumn: target.column + target.length,
+      });
+      editor.focus();
+    }, 60);
+  }
+
+  function openMatch(path: string, line: number, column: number, length: number) {
+    pendingReveal.current = { path, line, column, length };
+    if (path === activePath) revealPending();
+    else openFile(path);
+  }
+
+  const activePathRef = useRef(activePath);
+  activePathRef.current = activePath;
+  useEffect(revealPending, [activePath]);
+
+  // ⌘/Ctrl + Shift + F opens the search
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // ---------- Files & folders ----------
 
@@ -405,6 +451,7 @@ export function Playground({ slug }: Props) {
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => runRef.current());
     // The editor is read-only when signed out; typing asks the visitor to log in
     editor.onDidAttemptReadOnlyEdit(() => canChangeRef.current());
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, () => setSearchOpen(true));
   };
 
   const canRun = activePath !== null && runLanguage(activePath) !== null;
@@ -564,8 +611,16 @@ export function Playground({ slug }: Props) {
         <nav className="flex max-h-48 shrink-0 flex-col border-b border-line bg-panel md:max-h-none md:w-56 md:border-r md:border-b-0">
           <div className="flex items-center gap-1 border-b border-line px-3 py-2">
             <h2 className="mr-auto text-xs font-semibold tracking-wide text-muted uppercase">
-              Files
+              {searchOpen ? 'Search' : 'Files'}
             </h2>
+            <button
+              onClick={() => setSearchOpen((open) => !open)}
+              aria-pressed={searchOpen}
+              title="Find in files (⌘/Ctrl + Shift + F)"
+              className={`rounded px-1.5 py-0.5 text-xs hover:bg-raised ${searchOpen ? 'bg-raised text-accent' : 'text-fg'}`}
+            >
+              🔍
+            </button>
             <button
               onClick={newFile}
               title="New file"
@@ -581,23 +636,27 @@ export function Playground({ slug }: Props) {
               + Folder
             </button>
           </div>
-          <div
-            className="min-h-0 flex-1 overflow-auto"
-            onClick={(event) => {
-              // Clicking empty space selects the project root
-              if (event.target === event.currentTarget) setSelectedFolder('');
-            }}
-          >
-            <FileTree
-              nodes={buildTree(project)}
-              activePath={activePath}
-              selectedFolder={selectedFolder}
-              onOpenFile={openFile}
-              onSelectFolder={setSelectedFolder}
-              onRename={rename}
-              onDelete={remove}
-            />
-          </div>
+          {searchOpen ? (
+            <SearchPanel files={project.files} onOpenMatch={openMatch} />
+          ) : (
+            <div
+              className="min-h-0 flex-1 overflow-auto"
+              onClick={(event) => {
+                // Clicking empty space selects the project root
+                if (event.target === event.currentTarget) setSelectedFolder('');
+              }}
+            >
+              <FileTree
+                nodes={buildTree(project)}
+                activePath={activePath}
+                selectedFolder={selectedFolder}
+                onOpenFile={openFile}
+                onSelectFolder={setSelectedFolder}
+                onRename={rename}
+                onDelete={remove}
+              />
+            </div>
+          )}
         </nav>
 
         {/* Tabs + editor */}
