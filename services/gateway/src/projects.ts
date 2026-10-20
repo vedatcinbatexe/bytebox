@@ -10,10 +10,14 @@ export interface ProjectInput {
   stdin: string;
 }
 
+export type Visibility = 'public' | 'unlisted' | 'private';
+
 export interface Project extends ProjectInput {
   slug: string;
   forkedFrom: string | null;
   ownerId: string | null;
+  ownerLogin: string | null;
+  visibility: Visibility;
   createdAt: string;
   updatedAt: string;
 }
@@ -23,15 +27,17 @@ export interface ProjectSummary {
   title: string;
   fileCount: number;
   updatedAt: string;
+  visibility: Visibility;
+  ownerLogin: string | null;
 }
 
 // userId is only ever set by the gateway, from a verified session
 async function call<T>(
   method: string,
   path: string,
-  options: { body?: object; userId?: string } = {},
+  options: { body?: object; userId?: string; userLogin?: string } = {},
 ): Promise<T | null> {
-  const { body, userId } = options;
+  const { body, userId, userLogin } = options;
   let response: Response;
   try {
     response = await fetch(`${baseUrl}${path}`, {
@@ -39,6 +45,7 @@ async function call<T>(
       headers: {
         'Content-Type': 'application/json',
         ...(userId ? { 'X-User-Id': userId } : {}),
+        ...(userLogin ? { 'X-User-Login': userLogin } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -70,8 +77,22 @@ async function call<T>(
   return (await response.json()) as T;
 }
 
-export function getProject(slug: string): Promise<Project | null> {
-  return call<Project>('GET', `/projects/${encodeURIComponent(slug)}`);
+// Private projects are only returned to their owner
+export function getProject(slug: string, userId?: string): Promise<Project | null> {
+  return call<Project>('GET', `/projects/${encodeURIComponent(slug)}`, { userId });
+}
+
+export async function explore(): Promise<ProjectSummary[]> {
+  return (await call<ProjectSummary[]>('GET', '/explore?limit=60')) ?? [];
+}
+
+export async function setVisibility(slug: string, visibility: Visibility, userId: string): Promise<Project> {
+  const updated = await call<Project>('PATCH', `/projects/${encodeURIComponent(slug)}`, {
+    body: { visibility },
+    userId,
+  });
+  if (!updated) throw new GraphQLError('Project not found', { extensions: { code: 'NOT_FOUND' } });
+  return updated;
 }
 
 export interface VersionSummary {
@@ -111,8 +132,9 @@ export function listMyProjects(userId: string): Promise<ProjectSummary[] | null>
 export async function createProject(
   input: ProjectInput & { forkedFrom?: string },
   userId: string,
+  userLogin?: string,
 ): Promise<Project> {
-  const created = await call<Project>('POST', '/projects', { body: input, userId });
+  const created = await call<Project>('POST', '/projects', { body: input, userId, userLogin });
   if (!created) {
     throw new GraphQLError('The project to fork was not found', { extensions: { code: 'NOT_FOUND' } });
   }

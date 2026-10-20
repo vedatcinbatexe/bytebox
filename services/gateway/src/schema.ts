@@ -15,8 +15,10 @@ import { isRateLimited } from './rateLimit.js';
 import {
   createProject,
   deleteProject,
+  explore,
   getVersion,
   listVersions,
+  setVisibility,
   renameProject,
   restoreVersion,
   getProject,
@@ -24,6 +26,7 @@ import {
   updateProject,
   type Project,
   type ProjectInput,
+  type Visibility,
 } from './projects.js';
 import type { SessionUser } from './auth.js';
 
@@ -61,8 +64,10 @@ const typeDefs = /* GraphQL */ `
     health: String!
     languages: [Language!]!
     run(id: ID!): Run
-    "A shared project, or null if the link is unknown"
+    "A shared project, or null if the link is unknown (or private and not yours)"
     project(slug: String!): Project
+    "Newest public projects"
+    explore: [ProjectSummary!]!
     "The signed-in user, or null"
     me: User
     "Projects owned by the signed-in user, newest first"
@@ -83,6 +88,8 @@ const typeDefs = /* GraphQL */ `
     updateProject(slug: String!, input: ProjectInput!): Project!
     "Rename a project you own"
     renameProject(slug: String!, title: String!): Project!
+    "public (listed on Explore), unlisted (anyone with the link) or private (only you)"
+    setProjectVisibility(slug: String!, visibility: Visibility!): Project!
     "Delete a project you own (cannot be undone)"
     deleteProject(slug: String!): Boolean!
     "Make an earlier version the current one (the current one is kept in history)"
@@ -117,6 +124,8 @@ const typeDefs = /* GraphQL */ `
     title: String!
     fileCount: Int!
     updatedAt: String!
+    visibility: Visibility!
+    ownerLogin: String
   }
 
   type Subscription {
@@ -150,8 +159,16 @@ const typeDefs = /* GraphQL */ `
     content: String!
   }
 
+  enum Visibility {
+    PUBLIC
+    UNLISTED
+    PRIVATE
+  }
+
   type Project {
     slug: String!
+    visibility: Visibility!
+    ownerLogin: String
     title: String!
     files: [ProjectFile!]!
     folders: [String!]!
@@ -249,7 +266,8 @@ export const schema = createSchema<Context>({
           throw toGraphQLError(error);
         }
       },
-      project: (_, { slug }: { slug: string }) => getProject(slug),
+      project: (_, { slug }: { slug: string }, { user }) => getProject(slug, user?.id),
+      explore: () => explore(),
       me: (_, __, { user }) => user,
       myProjects: async (_, __, { user }) => (user ? ((await listMyProjects(user.id)) ?? []) : []),
       projectVersions: (_, { slug }: { slug: string }, { user }) => listVersions(slug, requireUser(user).id),
@@ -268,6 +286,11 @@ export const schema = createSchema<Context>({
     Project: {
       ownedByMe: (project: Project, _: unknown, { user }: Context) =>
         user !== null && project.ownerId === user.id,
+      visibility: (project: Project) => (project.visibility ?? 'unlisted').toUpperCase(),
+    },
+
+    ProjectSummary: {
+      visibility: (project: { visibility?: string }) => (project.visibility ?? 'unlisted').toUpperCase(),
     },
 
     Mutation: {
@@ -278,7 +301,17 @@ export const schema = createSchema<Context>({
       ) => {
         const signedIn = requireUser(user);
         await limitSaves(signedIn.id);
-        return createProject({ ...input, ...(forkedFrom ? { forkedFrom } : {}) }, signedIn.id);
+        return createProject({ ...input, ...(forkedFrom ? { forkedFrom } : {}) }, signedIn.id, signedIn.login);
+      },
+
+      setProjectVisibility: async (
+        _,
+        { slug, visibility }: { slug: string; visibility: string },
+        { user },
+      ) => {
+        const signedIn = requireUser(user);
+        await limitSaves(signedIn.id);
+        return setVisibility(slug, visibility.toLowerCase() as Visibility, signedIn.id);
       },
 
       renameProject: async (_, { slug, title }: { slug: string; title: string }, { user }) => {

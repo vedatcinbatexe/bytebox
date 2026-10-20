@@ -93,6 +93,9 @@ export function UserMenu({ user, loading }: Props) {
           <Link href="/runs" role="menuitem" className="block px-3 py-2 hover:bg-raised">
             🕘 Run history
           </Link>
+          <Link href="/explore" role="menuitem" className="block px-3 py-2 hover:bg-raised">
+            🌍 Explore
+          </Link>
           <Link href="/" role="menuitem" className="block px-3 py-2 hover:bg-raised">
             ✏️ Workspace
           </Link>
