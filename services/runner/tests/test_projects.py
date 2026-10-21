@@ -148,3 +148,15 @@ def test_java_compile_error_is_reported():
     result = run_project("java", files(**{"Main.java": "public class Main { void broken( }"}), "Main.java")
     assert result["exitCode"] != 0
     assert "error" in result["stderr"]
+
+
+def test_arguments_reach_the_program_unchanged():
+    args = ["hello world", "$HOME", "a'b", "; echo hacked"]
+    for language, entry, code in [
+        ("python", "main.py", "import sys\nprint(sys.argv[1:])"),
+        ("javascript", "main.js", "console.log(JSON.stringify(process.argv.slice(2)))"),
+    ]:
+        result = run_project(language, files(**{entry: code}), entry, args=args)
+        assert result["status"] == "completed", result["stderr"]
+        assert "hacked\n" not in result["stdout"]
+        assert "hello world" in result["stdout"] and "$HOME" in result["stdout"] and "a'b" in result["stdout"]

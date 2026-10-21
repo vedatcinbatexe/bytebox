@@ -326,3 +326,12 @@ def test_comments_need_a_user_text_and_a_visible_project(client):
     client.patch(f"/projects/{slug}", json={"visibility": "private"}, headers=ALICE)
     assert client.get(f"/projects/{slug}/comments", headers=BOB).status_code == 404
     assert client.post(f"/projects/{slug}/comments", json={"text": "hi"}, headers=BOB).status_code == 404
+
+
+def test_arguments_are_saved_and_versioned(client):
+    slug = create(client, {**PROJECT, "args": "--name Ada"})["slug"]
+    assert client.get(f"/projects/{slug}").json()["args"] == "--name Ada"
+    client.put(f"/projects/{slug}", json={**PROJECT, "args": "--name Bob"}, headers=ALICE)
+    version = client.get(f"/projects/{slug}/versions", headers=ALICE).json()[0]
+    restored = client.post(f"/projects/{slug}/versions/{version['id']}/restore", headers=ALICE).json()
+    assert restored["args"] == "--name Ada"

@@ -37,10 +37,11 @@ export async function createRun(
   files: ProjectFile[],
   entryFile: string,
   stdin: string,
+  args: string[] = [],
 ): Promise<Run> {
   const data = await request<{ createRun: Run }>(
     `mutation CreateRun($input: CreateRunInput!) { createRun(input: $input) { ${RUN_FIELDS} } }`,
-    { input: { files, entryFile, stdin } },
+    { input: { files, entryFile, stdin, args } },
   );
   return data.createRun;
 }

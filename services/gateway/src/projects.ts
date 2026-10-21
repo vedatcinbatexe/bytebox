@@ -8,6 +8,7 @@ export interface ProjectInput {
   files: { path: string; content: string }[];
   folders: string[];
   stdin: string;
+  args?: string;
 }
 
 export type Visibility = 'public' | 'unlisted' | 'private';

@@ -308,7 +308,7 @@ def restore_version(slug: Slug, version_id: str, user_id: UserId = None):
     check_owner(document, require_user(user_id))
     version = find_version(slug, version_id)
     keep_version(document)  # restoring is a change too, so the current version stays in history
-    content = {key: version[key] for key in ("title", "files", "folders", "stdin")}
+    content = {key: version.get(key, "") for key in ("title", "files", "folders", "stdin", "args")}
     db.projects.update_one({"_id": slug}, {"$set": {**content, "updated_at": datetime.now(UTC)}})
     return to_project(find_project(slug))
 
@@ -322,6 +322,7 @@ def keep_version(document):
             "files": document["files"],
             "folders": document.get("folders", []),
             "stdin": document.get("stdin", ""),
+            "args": document.get("args", ""),
             "saved_at": document["updated_at"],
             "kept_at": datetime.now(UTC),
         }

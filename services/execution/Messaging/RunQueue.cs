@@ -24,6 +24,7 @@ public class RunQueue(IConnection connection)
             entryFile = run.EntryFile,
             files = run.Files.Select(file => new { path = file.Path, content = file.Content }),
             stdin = run.Stdin,
+            args = run.Args,
         });
         var properties = new BasicProperties { Persistent = true, ContentType = "application/json" };
 

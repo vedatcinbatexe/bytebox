@@ -47,6 +47,7 @@ def on_message(channel, method, properties, body):
                 job.get("entryFile", ""),
                 job.get("stdin", ""),
                 on_start=lambda collector: output.setdefault("collector", collector),
+                args=[str(arg) for arg in job.get("args", [])],
             )
         except Exception as error:  # Docker problems must not crash the runner
             print(f"Run {run_id} failed: {error}", flush=True)

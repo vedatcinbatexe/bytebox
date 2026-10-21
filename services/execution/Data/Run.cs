@@ -7,6 +7,7 @@ public class Run
     public string EntryFile { get; set; } = "";
     public List<ProjectFile> Files { get; set; } = [];
     public string Stdin { get; set; } = "";
+    public List<string> Args { get; set; } = []; // command-line arguments
     public string? UserId { get; set; }
 
     // queued | completed | timed_out | memory_exceeded | failed
