@@ -4,7 +4,7 @@ import type { Project } from './project';
 export const STARTER_PROJECT: Project = {
   files: {
     'main.py': `# 👋 Welcome to Bytebox!
-# This is a small Python program. Press ▶ Run (or ⌘/Ctrl + Enter) to run it.
+# Press ▶ Run (or ⌘/Ctrl + Enter) to run this program.
 # Its output appears on the right.
 
 name = input()  # reads the "Input (stdin)" box on the right
