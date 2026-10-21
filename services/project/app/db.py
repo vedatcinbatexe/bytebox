@@ -18,3 +18,7 @@ stars.create_index([("project_id", 1), ("user_id", 1)], unique=True)
 # Earlier versions of projects, saved before every change (newest kept, see main.py)
 versions = database["project_versions"]
 versions.create_index([("project_id", 1), ("saved_at", -1)])
+
+# Comments on projects, oldest first
+comments = database["comments"]
+comments.create_index([("project_id", 1), ("created_at", 1)])

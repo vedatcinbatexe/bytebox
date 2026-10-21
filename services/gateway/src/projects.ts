@@ -23,6 +23,7 @@ export interface Project extends ProjectInput {
   tags: string[];
   forkCount: number;
   forkedFromTitle: string | null;
+  commentCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,15 +67,15 @@ async function call<T>(
   if (response.status === 401) {
     throw new GraphQLError('Log in or sign up first', { extensions: { code: 'UNAUTHENTICATED' } });
   }
-  if (response.status === 403) {
-    throw new GraphQLError('Only the owner can change this project', { extensions: { code: 'FORBIDDEN' } });
-  }
-  if (response.status === 422) {
-    // FastAPI validation error: { detail: [{ msg, loc }] }
-    const { detail } = (await response.json()) as { detail: { msg: string }[] };
-    throw new GraphQLError(readableMessage(detail[0]?.msg), {
-      extensions: { code: 'BAD_USER_INPUT' },
-    });
+  if (response.status === 403 || response.status === 409 || response.status === 422) {
+    // detail is our own message (a string) or FastAPI's validation errors: [{ msg, loc }]
+    const { detail } = (await response.json()) as { detail: string | { msg: string }[] };
+    if (response.status === 403) {
+      const message = typeof detail === 'string' ? detail : 'Only the owner can change this project';
+      throw new GraphQLError(message, { extensions: { code: 'FORBIDDEN' } });
+    }
+    const message = typeof detail === 'string' ? detail : readableMessage(detail[0]?.msg);
+    throw new GraphQLError(message, { extensions: { code: 'BAD_USER_INPUT' } });
   }
   if (!response.ok) {
     throw new GraphQLError('Project service error', { extensions: { code: 'SERVICE_UNAVAILABLE' } });
@@ -104,6 +105,35 @@ export async function projectStats(): Promise<{ projects: number; publicProjects
 
 export async function listForks(slug: string, userId?: string): Promise<ProjectSummary[]> {
   return (await call<ProjectSummary[]>('GET', `/projects/${encodeURIComponent(slug)}/forks`, { userId })) ?? [];
+}
+
+export interface Comment {
+  id: string;
+  text: string;
+  authorLogin: string | null;
+  createdAt: string;
+  canDelete: boolean;
+}
+
+export async function listComments(slug: string, userId?: string): Promise<Comment[]> {
+  return (await call<Comment[]>('GET', `/projects/${encodeURIComponent(slug)}/comments`, { userId })) ?? [];
+}
+
+export async function addComment(slug: string, text: string, userId: string, userLogin: string): Promise<Comment> {
+  const comment = await call<Comment>('POST', `/projects/${encodeURIComponent(slug)}/comments`, {
+    body: { text },
+    userId,
+    userLogin,
+  });
+  if (!comment) throw new GraphQLError('Project not found', { extensions: { code: 'NOT_FOUND' } });
+  return comment;
+}
+
+export async function deleteComment(slug: string, commentId: string, userId: string): Promise<void> {
+  const path = `/projects/${encodeURIComponent(slug)}/comments/${encodeURIComponent(commentId)}`;
+  if (!(await call<object>('DELETE', path, { userId }))) {
+    throw new GraphQLError('Comment not found', { extensions: { code: 'NOT_FOUND' } });
+  }
 }
 
 export async function popularTags(): Promise<{ tag: string; count: number }[]> {

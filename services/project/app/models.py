@@ -101,6 +101,7 @@ class Project(ProjectInput):
     starred_by_me: bool = False
     tags: list[str] = []
     fork_count: int = 0
+    comment_count: int = 0
     forked_from_title: str | None = None  # None when the original is gone or private
     created_at: datetime
     updated_at: datetime
@@ -115,6 +116,18 @@ class ProjectSummary(Model):
     owner_login: str | None = None
     star_count: int = 0
     tags: list[str] = []
+
+
+class CommentInput(Model):
+    text: str = Field(min_length=1, max_length=1000)
+
+
+class Comment(Model):
+    id: str
+    text: str
+    author_login: str | None = None
+    created_at: datetime
+    can_delete: bool = False  # the author or the project owner
 
 
 class ProjectStats(Model):

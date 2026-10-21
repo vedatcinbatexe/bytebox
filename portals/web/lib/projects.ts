@@ -23,6 +23,7 @@ export interface SavedProject {
   tags: string[];
   forkCount: number;
   forkedFromTitle: string | null;
+  commentCount: number;
 }
 
 export interface ProjectSummary {
@@ -51,6 +52,7 @@ interface ApiProject {
   tags: string[];
   forkCount: number;
   forkedFromTitle: string | null;
+  commentCount: number;
 }
 
 export interface ProjectInput {
@@ -60,7 +62,7 @@ export interface ProjectInput {
 }
 
 const PROJECT_FIELDS =
-  'slug title files { path content } folders stdin forkedFrom ownedByMe visibility ownerLogin starCount starredByMe tags forkCount forkedFromTitle';
+  'slug title files { path content } folders stdin forkedFrom ownedByMe visibility ownerLogin starCount starredByMe tags forkCount forkedFromTitle commentCount';
 const SUMMARY_FIELDS = 'slug title fileCount updatedAt visibility ownerLogin starCount tags';
 
 function fromApi(project: ApiProject): SavedProject {
@@ -81,6 +83,7 @@ function fromApi(project: ApiProject): SavedProject {
     tags: project.tags,
     forkCount: project.forkCount,
     forkedFromTitle: project.forkedFromTitle,
+    commentCount: project.commentCount,
   };
 }
 
@@ -251,4 +254,34 @@ export async function fetchStats(): Promise<PlatformStats> {
       languages { language runs averageTimeMs } statuses { status runs } last7Days { day runs } } }`,
   );
   return data.stats;
+}
+
+export interface Comment {
+  id: string;
+  text: string;
+  authorLogin: string | null;
+  createdAt: string;
+  canDelete: boolean;
+}
+
+const COMMENT_FIELDS = 'id text authorLogin createdAt canDelete';
+
+export async function fetchComments(slug: string): Promise<Comment[]> {
+  const data = await request<{ project: { comments: Comment[] } | null }>(
+    `query Comments($slug: String!) { project(slug: $slug) { comments { ${COMMENT_FIELDS} } } }`,
+    { slug },
+  );
+  return data.project?.comments ?? [];
+}
+
+export async function addComment(slug: string, text: string): Promise<Comment> {
+  const data = await request<{ addComment: Comment }>(
+    `mutation AddComment($slug: String!, $text: String!) { addComment(slug: $slug, text: $text) { ${COMMENT_FIELDS} } }`,
+    { slug, text },
+  );
+  return data.addComment;
+}
+
+export async function deleteComment(slug: string, id: string): Promise<void> {
+  await request(`mutation DeleteComment($slug: String!, $id: ID!) { deleteComment(slug: $slug, id: $id) }`, { slug, id });
 }

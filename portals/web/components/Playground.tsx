@@ -10,6 +10,7 @@ import { MarkdownPanel } from './MarkdownPanel';
 import { PreviewPanel } from './PreviewPanel';
 import { ProjectTags } from './ProjectTags';
 import { ForksDialog } from './ForksDialog';
+import { CommentsDialog } from './CommentsDialog';
 import { EditorSettingsDialog } from './EditorSettingsDialog';
 import { TestsPanel } from './TestsPanel';
 import { TESTS_FILE, parseTests, serializeTests } from '@/lib/tests';
@@ -166,6 +167,8 @@ export function Playground({ slug }: Props) {
     fromTitle: null,
   });
   const [forksOpen, setForksOpen] = useState(false);
+  const [commentCount, setCommentCount] = useState(0);
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const [cursor, setCursor] = useState<{ line: number; column: number } | null>(null);
   const [asideTab, setAsideTab] = useState<'output' | 'tests' | 'preview'>('output');
   // Focus mode: hide the file explorer (⌘/Ctrl + B) and/or the output panel (⌘/Ctrl + J)
@@ -283,6 +286,7 @@ export function Playground({ slug }: Props) {
           setStars({ starCount: saved.starCount, starredByMe: saved.starredByMe });
           setTagsState(saved.tags);
           setForkInfo({ count: saved.forkCount, from: saved.forkedFrom, fromTitle: saved.forkedFromTitle });
+          setCommentCount(saved.commentCount);
           setLoaded(true);
         })
         .catch((loadError) => showNotice(errorMessage(loadError), true));
@@ -950,6 +954,9 @@ export function Playground({ slug }: Props) {
                   </button>
                 )}
               </span>
+              <button onClick={() => setCommentsOpen(true)} title="Comments on this project" className={SECONDARY_BUTTON}>
+                💬 {commentCount}
+              </button>
               {visibility !== 'PRIVATE' && (
                 <button onClick={() => setEmbedOpen(true)} title="Put this project on another website" className={SECONDARY_BUTTON}>
                   &lt;/&gt; Embed
@@ -1297,6 +1304,18 @@ export function Playground({ slug }: Props) {
       )}
       {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
       {embedOpen && slug && <EmbedDialog slug={slug} onClose={() => setEmbedOpen(false)} />}
+      {commentsOpen && slug && (
+        <CommentsDialog
+          slug={slug}
+          signedIn={Boolean(user)}
+          onLoginNeeded={() => {
+            setCommentsOpen(false); // the login dialog would be hidden behind this one
+            setLoginPromptOpen(true);
+          }}
+          onCountChange={setCommentCount}
+          onClose={() => setCommentsOpen(false)}
+        />
+      )}
       {forksOpen && slug && (
         <ForksDialog slug={slug} forkCount={forkInfo.count} onClose={() => setForksOpen(false)} />
       )}
