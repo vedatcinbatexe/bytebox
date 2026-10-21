@@ -37,8 +37,11 @@ import {
   DEFAULT_EDITOR_SETTINGS,
   loadEditorSettings,
   saveEditorSettings,
+  zoomPercent,
+  zoomStep,
   type EditorSettings,
 } from '@/lib/editorSettings';
+import { resetStoredSizes, useStoredSize } from '@/lib/useStoredSize';
 import { htmlFiles } from '@/lib/preview';
 import { downloadZip } from '@/lib/zip';
 import { canFormat, formatCode } from '@/lib/format';
@@ -275,6 +278,26 @@ export function Playground({ slug, invite }: Props) {
     setEditorSettings(next);
     saveEditorSettings(next);
   }
+
+  // Zoom: the code font size, which the output, input, terminal and logs follow too
+  function zoom(direction: 1 | -1 | 0) {
+    setEditorSettings((current) => {
+      const fontSize = direction === 0 ? DEFAULT_EDITOR_SETTINGS.fontSize : zoomStep(current.fontSize, direction);
+      const next = { ...current, fontSize };
+      saveEditorSettings(next);
+      return next;
+    });
+  }
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+
+  // Every panel back to its first size
+  function resetLayout() {
+    setSizes(DEFAULT_SIZES);
+    saveSizes(DEFAULT_SIZES);
+    resetStoredSizes();
+  }
+  const stdinSize = useStoredSize('stdin', 96, 40, 480);
 
   function resize(panel: keyof PanelSizes, delta: number) {
     setSizes((current) => {
@@ -722,6 +745,10 @@ export function Playground({ slug, invite }: Props) {
     commands.push(
       action('shortcuts', 'Keyboard shortcuts', () => setShortcutsOpen(true), '?'),
       action('editor-settings', 'Editor settings (font size, word wrap…)', () => setSettingsOpen(true)),
+      action('zoom-in', 'Zoom in', () => zoom(1), '⌘='),
+      action('zoom-out', 'Zoom out', () => zoom(-1), '⌘−'),
+      action('zoom-reset', 'Reset zoom (100%)', () => zoom(0), '⌘0'),
+      action('reset-layout', 'Reset layout (all panels back to their first size)', resetLayout),
       action('commands-help', 'Terminal commands help', () => setHelpOpen(true)),
       ...THEMES.map((theme) => ({
         id: `theme:${theme.id}`,
@@ -977,6 +1004,10 @@ export function Playground({ slug, invite }: Props) {
     editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => void formatRef.current());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveShortcutRef.current());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => setPaletteOpen(true));
+    // Zoom the code (instead of the whole page) while typing
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Equal, () => zoomRef.current(1));
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Minus, () => zoomRef.current(-1));
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Digit0, () => zoomRef.current(0));
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyB, () => togglePanelRef.current('explorer'));
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyJ, () => togglePanelRef.current('aside'));
     editor.onDidChangeCursorPosition((event) =>
@@ -1015,7 +1046,10 @@ export function Playground({ slug, invite }: Props) {
   }
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div
+      className="flex h-dvh flex-col"
+      style={{ '--code-size': `${editorSettings.fontSize}px` } as React.CSSProperties}
+    >
       <header className="flex flex-wrap items-center gap-2 border-b border-line bg-panel px-3 py-2">
         <Link href="/" className="mr-1 text-lg font-bold whitespace-nowrap" title="Bytebox home">
           📦 Bytebox
@@ -1451,6 +1485,7 @@ export function Playground({ slug, invite }: Props) {
                 onTerminalChanges={applyTerminalChanges}
                 onClose={() => setTerminalOpen(false)}
                 height={sizes.terminal}
+                fontSize={Math.max(10, editorSettings.fontSize - 1)}
               />
             </>
           )}
@@ -1570,12 +1605,18 @@ export function Playground({ slug, invite }: Props) {
                   onChange={(event) => update({ stdin: event.target.value })}
                   readOnly={!user}
                   onClick={() => canChange()}
-                  rows={4}
                   spellCheck={false}
-                  className="w-full resize-none bg-transparent px-4 py-2 font-mono text-sm outline-none"
+                  style={{ height: stdinSize.size }}
+                  className="code-text w-full resize-none bg-transparent px-4 py-2 font-mono outline-none"
                   placeholder="Input for your program"
                 />
               </section>
+              <ResizeHandle
+                direction="y"
+                label="Resize the input box"
+                onResize={(delta) => stdinSize.resize(delta)}
+                onReset={stdinSize.reset}
+              />
               <OutputPanel
                 run={run}
                 error={error}
@@ -1599,6 +1640,8 @@ export function Playground({ slug, invite }: Props) {
         }
         onShowShortcuts={() => setShortcutsOpen(true)}
         onShowSettings={() => setSettingsOpen(true)}
+        zoomPercent={zoomPercent(editorSettings.fontSize)}
+        onZoom={zoom}
         hidden={hidden}
         onTogglePanel={togglePanel}
       />

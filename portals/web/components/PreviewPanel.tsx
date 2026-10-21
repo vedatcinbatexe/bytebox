@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { ResizeHandle } from './ResizeHandle';
+import { useStoredSize } from '@/lib/useStoredSize';
 import { PREVIEW_MESSAGE, buildPreviewDocument, moduleEntries } from '@/lib/preview';
 import { loadCompiler } from '@/lib/compileModule';
 import type { Compile } from '@/lib/modules';
@@ -17,6 +19,7 @@ interface Props {
 
 // Live preview of an HTML file in a sandboxed iframe, with its console output underneath
 export function PreviewPanel({ files, htmlPath }: Props) {
+  const consoleSize = useStoredSize('preview-console', 128, 40, 600);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [document, setDocument] = useState('');
   const [logs, setLogs] = useState<LogLine[]>([]);
@@ -71,7 +74,16 @@ export function PreviewPanel({ files, htmlPath }: Props) {
         srcDoc={document}
         className="min-h-48 w-full flex-1 bg-white"
       />
-      <div className="max-h-32 shrink-0 overflow-auto border-t border-line bg-app px-3 py-1.5 font-mono text-xs">
+      <ResizeHandle
+        direction="y"
+        label="Resize the console"
+        onResize={(delta) => consoleSize.resize(-delta)}
+        onReset={consoleSize.reset}
+      />
+      <div
+        className="code-text-small shrink-0 overflow-auto bg-app px-3 py-1.5 font-mono"
+        style={{ height: consoleSize.size }}
+      >
         {logs.length === 0 ? (
           <p className="text-subtle">Console output appears here.</p>
         ) : (

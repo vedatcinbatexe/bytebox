@@ -1,5 +1,7 @@
 'use client';
 
+import { ResizeHandle } from './ResizeHandle';
+import { useStoredSize } from '@/lib/useStoredSize';
 import { useEffect, useRef, useState } from 'react';
 import { AnsiText } from './OutputPanel';
 import type { ServerStatus } from '@/lib/useDevServer';
@@ -26,6 +28,7 @@ export function ServerPanel({ framework, status, runningFramework, previewUrl, l
   const [path, setPath] = useState('/');
   const [reloads, setReloads] = useState(0);
   const logRef = useRef<HTMLDivElement>(null);
+  const logSize = useStoredSize('server-log', 160, 48, 600);
   const badge = BADGE[status];
   const busy = status === 'starting' || status === 'running';
   const pageUrl = previewUrl ? previewUrl.replace(/\/$/, '') + (path.startsWith('/') ? path : `/${path}`) : null;
@@ -97,7 +100,12 @@ export function ServerPanel({ framework, status, runningFramework, previewUrl, l
         </div>
       )}
 
-      <div ref={logRef} className="max-h-48 min-h-20 shrink-0 overflow-auto border-t border-line bg-app px-3 py-2 font-mono text-xs">
+      <ResizeHandle direction="y" label="Resize the server log" onResize={(delta) => logSize.resize(-delta)} onReset={logSize.reset} />
+      <div
+        ref={logRef}
+        className="code-text-small shrink-0 overflow-auto bg-app px-3 py-2 font-mono"
+        style={{ height: logSize.size }}
+      >
         {log ? <AnsiText text={log} className="text-fg" /> : <p className="text-subtle">The server log appears here.</p>}
       </div>
     </section>

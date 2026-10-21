@@ -216,3 +216,11 @@
     transition: none;
   }
 }
+
+/* Text in the code panels (output, input, consoles, logs) follows the zoom: the Playground sets --code-size */
+.code-text {
+  font-size: var(--code-size, 14px);
+}
+.code-text-small {
+  font-size: calc(var(--code-size, 14px) * 0.86);
+}
