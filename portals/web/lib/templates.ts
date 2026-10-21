@@ -437,3 +437,224 @@ impl Rectangle {
     },
   },
 );
+
+// Frameworks that run in the browser preview (packages come from a CDN, see lib/modules.ts)
+const REACT_HTML = (entry: string) => `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>React app</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/${entry}"></script>
+  </body>
+</html>
+`;
+
+const REACT_CSS = `body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+.app {
+  max-width: 420px;
+  margin: 48px auto;
+  padding: 24px;
+  border-radius: 12px;
+  background: #1e293b;
+}
+
+form {
+  display: flex;
+  gap: 8px;
+}
+
+input {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #0f172a;
+  color: inherit;
+}
+
+button {
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: #10b981;
+  color: white;
+  cursor: pointer;
+}
+
+li {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #334155;
+}
+
+.done {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+`;
+
+WORKSPACE_TEMPLATES.push(
+  {
+    id: 'react',
+    name: 'React',
+    description: 'A React to-do app with components, state and CSS, in the live preview.',
+    icon: '⚛️',
+    files: {
+      'index.html': REACT_HTML('main.jsx'),
+      'package.json': `{
+  "name": "react-app",
+  "private": true,
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}
+`,
+      'src/main.jsx': `import { createRoot } from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+createRoot(document.getElementById('root')).render(<App />);
+`,
+      'src/App.jsx': `import { useState } from 'react';
+import TodoItem from './components/TodoItem';
+
+export default function App() {
+  const [todos, setTodos] = useState([
+    { id: 1, text: 'Edit src/App.jsx', done: false },
+    { id: 2, text: 'Watch the preview update', done: false },
+  ]);
+  const [text, setText] = useState('');
+
+  function add(event) {
+    event.preventDefault();
+    if (!text.trim()) return;
+    setTodos([...todos, { id: Date.now(), text, done: false }]);
+    setText('');
+  }
+
+  function toggle(id) {
+    setTodos(todos.map((todo) => (todo.id === id ? { ...todo, done: !todo.done } : todo)));
+  }
+
+  return (
+    <main className="app">
+      <h1>⚛️ My to-dos</h1>
+      <form onSubmit={add}>
+        <input value={text} onChange={(event) => setText(event.target.value)} placeholder="Something to do" />
+        <button>Add</button>
+      </form>
+      <ul>
+        {todos.map((todo) => (
+          <TodoItem key={todo.id} todo={todo} onToggle={() => toggle(todo.id)} />
+        ))}
+      </ul>
+      <p>{todos.filter((todo) => !todo.done).length} left</p>
+    </main>
+  );
+}
+`,
+      'src/components/TodoItem.jsx': `export default function TodoItem({ todo, onToggle }) {
+  return (
+    <li>
+      <span className={todo.done ? 'done' : ''}>{todo.text}</span>
+      <button onClick={onToggle}>{todo.done ? 'Undo' : 'Done'}</button>
+    </li>
+  );
+}
+`,
+      'src/index.css': REACT_CSS,
+    },
+  },
+  {
+    id: 'react-ts',
+    name: 'React + TypeScript',
+    description: 'The same app with typed props and state (.tsx).',
+    icon: '🔷',
+    files: {
+      'index.html': REACT_HTML('main.tsx'),
+      'package.json': `{
+  "name": "react-ts-app",
+  "private": true,
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}
+`,
+      'src/main.tsx': `import { createRoot } from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+createRoot(document.getElementById('root')!).render(<App />);
+`,
+      'src/App.tsx': `import { useState, type FormEvent } from 'react';
+import Counter from './Counter';
+
+interface Todo {
+  id: number;
+  text: string;
+  done: boolean;
+}
+
+export default function App() {
+  const [todos, setTodos] = useState<Todo[]>([{ id: 1, text: 'Edit src/App.tsx', done: false }]);
+  const [text, setText] = useState('');
+
+  function add(event: FormEvent) {
+    event.preventDefault();
+    if (!text.trim()) return;
+    setTodos([...todos, { id: Date.now(), text, done: false }]);
+    setText('');
+  }
+
+  return (
+    <main className="app">
+      <h1>🔷 Typed to-dos</h1>
+      <form onSubmit={add}>
+        <input value={text} onChange={(event) => setText(event.target.value)} placeholder="Something to do" />
+        <button>Add</button>
+      </form>
+      <ul>
+        {todos.map((todo) => (
+          <li key={todo.id}>{todo.text}</li>
+        ))}
+      </ul>
+      <Counter label="Clicks" start={0} />
+    </main>
+  );
+}
+`,
+      'src/Counter.tsx': `import { useState } from 'react';
+
+interface Props {
+  label: string;
+  start: number;
+}
+
+export default function Counter({ label, start }: Props) {
+  const [count, setCount] = useState(start);
+  return (
+    <p>
+      <button onClick={() => setCount(count + 1)}>
+        {label}: {count}
+      </button>
+    </p>
+  );
+}
+`,
+      'src/index.css': REACT_CSS,
+    },
+  },
+);

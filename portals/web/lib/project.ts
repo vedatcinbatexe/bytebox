@@ -35,6 +35,9 @@ const EDITOR_LANGUAGES: Record<string, string> = {
   '.html': 'html',
   '.css': 'css',
   '.ts': 'typescript',
+  '.jsx': 'javascript',
+  '.tsx': 'typescript',
+  '.mjs': 'javascript',
 };
 
 function extension(path: string): string {

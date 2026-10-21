@@ -44,6 +44,7 @@ import { UserMenu } from './UserMenu';
 import { useMe } from '@/lib/auth';
 import { ThemePicker } from './ThemePicker';
 import { MONACO_THEME, applyMonacoTheme, useTheme } from '@/lib/theme';
+import { configureLanguages } from '@/lib/monacoSetup';
 import { createRun, watchRun, type Run } from '@/lib/runs';
 import {
   MAX_FILES,
@@ -114,11 +115,12 @@ const STARTER_WORKSPACE: Workspace = {
   args: '',
 };
 
-// Open the first runnable file, preferring main.* (Main.java for Java)
+// Open the first runnable file, preferring main.* (Main.java for Java, App.jsx for React)
 function workspaceFor(saved: SavedProject): Workspace {
   const paths = Object.keys(saved.project.files).sort();
   const first =
     paths.find((path) => /^(main\.(py|js|ts|cpp|go|rs)|Main\.java)$/.test(path)) ??
+    paths.find((path) => /(^|\/)App\.(jsx|tsx)$/.test(path)) ?? // React projects
     paths.find((path) => path === 'index.html') ??
     paths.find((path) => runLanguage(path)) ??
     paths[0] ??
@@ -1184,13 +1186,14 @@ export function Playground({ slug, invite }: Props) {
           >
             ? Commands
           </button>
-          {isHtmlOpen || isMarkdownOpen ? (
+          {isHtmlOpen || isMarkdownOpen || (!canRun && previewPath !== undefined) ? (
             <button
               onClick={() => showAside('preview')}
-              title={isHtmlOpen ? 'Show the live preview of this page' : 'Show this file rendered'}
+              title={isMarkdownOpen ? 'Show this file rendered' : 'Show the live preview of this page'}
               className="max-w-[50vw] truncate rounded bg-accent px-3.5 py-1.5 text-sm font-semibold text-accent-fg hover:bg-accent-hover"
             >
-              👁 Preview {activePath}
+              {/* e.g. App.jsx in a React project: preview the page that uses it */}
+              👁 Preview {isHtmlOpen || isMarkdownOpen ? activePath : previewPath}
             </button>
           ) : (
             <button
@@ -1370,7 +1373,10 @@ export function Playground({ slug, invite }: Props) {
                   }))
                 }
                 onMount={onEditorMount}
-                beforeMount={(monaco) => applyMonacoTheme(monaco, theme)}
+                beforeMount={(monaco) => {
+                  applyMonacoTheme(monaco, theme);
+                  configureLanguages(monaco);
+                }}
                 theme={MONACO_THEME}
                 options={{
                   fontSize: editorSettings.fontSize,
