@@ -7,6 +7,7 @@ import { editorLanguage } from '@/lib/project';
 import { htmlFiles } from '@/lib/preview';
 import { fetchProject, type SavedProject } from '@/lib/projects';
 import { MONACO_THEME, applyMonacoTheme, useTheme } from '@/lib/theme';
+import { configureLanguages } from '@/lib/monacoSetup';
 
 // Compact, read-only view of a project for other websites (<iframe src="/embed/<slug>">).
 // Running code needs a login, and login cookies aren't sent inside other sites' iframes,
@@ -91,7 +92,10 @@ export function EmbedView({ slug }: { slug: string }) {
                 path={active}
                 value={files[active]}
                 language={editorLanguage(active)}
-                beforeMount={(monaco) => applyMonacoTheme(monaco, theme)}
+                beforeMount={(monaco) => {
+                  applyMonacoTheme(monaco, theme);
+                  configureLanguages(monaco);
+                }}
                 theme={MONACO_THEME}
                 options={{
                   readOnly: true,

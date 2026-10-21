@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     'An online code playground: multi-file projects in Python, JavaScript, TypeScript, Java, C++, Go and Rust, a live terminal, HTML preview, tests and sharing.',
 };
 
-const LANGUAGES = ['🐍 Python', '🟨 JavaScript', '🔷 TypeScript', '☕ Java', '⚙️ C++', '🐹 Go', '🦀 Rust', '🌐 HTML/CSS/JS'];
+const LANGUAGES = ['🐍 Python', '🟨 JavaScript', '🔷 TypeScript', '☕ Java', '⚙️ C++', '🐹 Go', '🦀 Rust', '🌐 HTML/CSS/JS', '⚛️ React'];
 
 const FEATURES = [
   { icon: '📁', title: 'Real projects', text: 'Files and folders, drag and drop, imports between files. Not just one snippet.' },

@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { PREVIEW_MESSAGE, buildPreviewDocument } from '@/lib/preview';
+import { PREVIEW_MESSAGE, buildPreviewDocument, moduleEntries } from '@/lib/preview';
+import { loadCompiler } from '@/lib/compileModule';
+import type { Compile } from '@/lib/modules';
 
 interface LogLine {
   level: 'log' | 'info' | 'warn' | 'error';
@@ -20,14 +22,22 @@ export function PreviewPanel({ files, htmlPath }: Props) {
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [reloads, setReloads] = useState(0);
 
+  // Pages with <script type="module"> (React, …) need the JSX/TypeScript compiler; it's loaded once
+  const [compile, setCompile] = useState<Compile | null>(null);
+  const needsCompiler = moduleEntries(files, htmlPath).length > 0;
+  useEffect(() => {
+    if (needsCompiler && !compile) void loadCompiler().then((loaded) => setCompile(() => loaded));
+  }, [needsCompiler, compile]);
+
   // Rebuild the page shortly after typing stops
   useEffect(() => {
+    if (needsCompiler && !compile) return;
     const timer = setTimeout(() => {
       setLogs([]);
-      setDocument(buildPreviewDocument(files, htmlPath));
+      setDocument(buildPreviewDocument(files, htmlPath, compile ?? undefined));
     }, 400);
     return () => clearTimeout(timer);
-  }, [files, htmlPath, reloads]);
+  }, [files, htmlPath, reloads, needsCompiler, compile]);
 
   // Console messages from the preview (only from our own iframe)
   useEffect(() => {
