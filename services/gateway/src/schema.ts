@@ -22,6 +22,7 @@ import {
   setVisibility,
   setTags,
   popularTags,
+  listForks,
   setStar,
   renameProject,
   restoreVersion,
@@ -247,6 +248,12 @@ const typeDefs = /* GraphQL */ `
     "False when signed out"
     starredByMe: Boolean!
     tags: [String!]!
+    "How many projects were forked from this one"
+    forkCount: Int!
+    "Title of the project this was forked from (null if it's gone or private)"
+    forkedFromTitle: String
+    "Public forks of this project, newest first"
+    forks: [ProjectSummary!]!
     title: String!
     files: [ProjectFile!]!
     folders: [String!]!
@@ -379,6 +386,8 @@ export const schema = createSchema<Context>({
       ownedByMe: (project: Project, _: unknown, { user }: Context) =>
         user !== null && project.ownerId === user.id,
       visibility: (project: Project) => (project.visibility ?? 'unlisted').toUpperCase(),
+      forkCount: (project: Project) => project.forkCount ?? 0,
+      forks: (project: Project, _: unknown, { user }: Context) => listForks(project.slug, user?.id),
     },
 
     ProjectSummary: {

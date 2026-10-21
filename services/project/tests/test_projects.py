@@ -273,3 +273,26 @@ def test_stats_count_projects_and_stars(client):
     client.patch(f"/projects/{public}", json={"visibility": "public"}, headers=ALICE)
     client.put(f"/projects/{public}/star", headers=BOB)
     assert client.get("/stats").json() == {"projects": 2, "publicProjects": 1, "stars": 1}
+
+
+def test_forks_are_counted_and_public_ones_listed(client):
+    original = create(client)["slug"]
+    public_fork = client.post("/projects", json={**PROJECT, "forkedFrom": original}, headers=BOB).json()["slug"]
+    client.post("/projects", json={**PROJECT, "forkedFrom": original}, headers=BOB)  # unlisted: counted, not listed
+    client.patch(f"/projects/{public_fork}", json={"visibility": "public"}, headers=BOB)
+
+    assert client.get(f"/projects/{original}").json()["forkCount"] == 2
+    assert [p["slug"] for p in client.get(f"/projects/{original}/forks").json()] == [public_fork]
+    fork = client.get(f"/projects/{public_fork}").json()
+    assert fork["forkedFrom"] == original
+    assert fork["forkedFromTitle"] == "Greeter"
+
+
+def test_a_fork_does_not_link_to_a_private_or_deleted_original(client):
+    original = create(client)["slug"]
+    fork = client.post("/projects", json={**PROJECT, "forkedFrom": original}, headers=BOB).json()["slug"]
+    client.patch(f"/projects/{original}", json={"visibility": "private"}, headers=ALICE)
+    assert client.get(f"/projects/{fork}", headers=BOB).json()["forkedFrom"] is None
+    assert client.get(f"/projects/{original}/forks", headers=BOB).status_code == 404
+    client.delete(f"/projects/{original}", headers=ALICE)
+    assert client.get(f"/projects/{fork}", headers=BOB).json()["forkedFromTitle"] is None

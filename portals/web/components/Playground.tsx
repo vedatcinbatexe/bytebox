@@ -9,6 +9,7 @@ import { OutputPanel, isFinished } from './OutputPanel';
 import { MarkdownPanel } from './MarkdownPanel';
 import { PreviewPanel } from './PreviewPanel';
 import { ProjectTags } from './ProjectTags';
+import { ForksDialog } from './ForksDialog';
 import { EditorSettingsDialog } from './EditorSettingsDialog';
 import { TestsPanel } from './TestsPanel';
 import { TESTS_FILE, parseTests, serializeTests } from '@/lib/tests';
@@ -159,6 +160,12 @@ export function Playground({ slug }: Props) {
   const [ownerLogin, setOwnerLogin] = useState<string | null>(null);
   const [stars, setStars] = useState({ starCount: 0, starredByMe: false });
   const [tags, setTagsState] = useState<string[]>([]);
+  const [forkInfo, setForkInfo] = useState<{ count: number; from: string | null; fromTitle: string | null }>({
+    count: 0,
+    from: null,
+    fromTitle: null,
+  });
+  const [forksOpen, setForksOpen] = useState(false);
   const [cursor, setCursor] = useState<{ line: number; column: number } | null>(null);
   const [asideTab, setAsideTab] = useState<'output' | 'tests' | 'preview'>('output');
   // Focus mode: hide the file explorer (⌘/Ctrl + B) and/or the output panel (⌘/Ctrl + J)
@@ -275,6 +282,7 @@ export function Playground({ slug }: Props) {
           setOwnerLogin(saved.ownerLogin);
           setStars({ starCount: saved.starCount, starredByMe: saved.starredByMe });
           setTagsState(saved.tags);
+          setForkInfo({ count: saved.forkCount, from: saved.forkedFrom, fromTitle: saved.forkedFromTitle });
           setLoaded(true);
         })
         .catch((loadError) => showNotice(errorMessage(loadError), true));
@@ -832,6 +840,11 @@ export function Playground({ slug }: Props) {
             by @{ownerLogin}
           </Link>
         )}
+        {slug && forkInfo.from && forkInfo.fromTitle && (
+          <Link href={`/p/${forkInfo.from}`} className="max-w-48 truncate text-xs text-muted hover:text-accent hover:underline">
+            ⑂ forked from {forkInfo.fromTitle}
+          </Link>
+        )}
         {slug && <ProjectTags tags={tags} onChange={isOwner ? changeTags : undefined} />}
         {notice && (
           <span className={`text-xs ${notice.isError ? 'text-danger' : 'text-success'}`}>{notice.text}</span>
@@ -918,9 +931,25 @@ export function Playground({ slug }: Props) {
               >
                 ⧉ Copy link
               </button>
-              <button onClick={fork} disabled={busy} title="Make your own copy of this project" className={SECONDARY_BUTTON}>
-                ⑂ Fork
-              </button>
+              <span className="flex">
+                <button
+                  onClick={fork}
+                  disabled={busy}
+                  title="Make your own copy of this project"
+                  className={`${SECONDARY_BUTTON} ${forkInfo.count > 0 ? 'rounded-r-none' : ''}`}
+                >
+                  ⑂ Fork
+                </button>
+                {forkInfo.count > 0 && (
+                  <button
+                    onClick={() => setForksOpen(true)}
+                    title="See the forks of this project"
+                    className={`${SECONDARY_BUTTON} -ml-px rounded-l-none tabular-nums`}
+                  >
+                    {forkInfo.count}
+                  </button>
+                )}
+              </span>
               {visibility !== 'PRIVATE' && (
                 <button onClick={() => setEmbedOpen(true)} title="Put this project on another website" className={SECONDARY_BUTTON}>
                   &lt;/&gt; Embed
@@ -1268,6 +1297,9 @@ export function Playground({ slug }: Props) {
       )}
       {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
       {embedOpen && slug && <EmbedDialog slug={slug} onClose={() => setEmbedOpen(false)} />}
+      {forksOpen && slug && (
+        <ForksDialog slug={slug} forkCount={forkInfo.count} onClose={() => setForksOpen(false)} />
+      )}
       {historyOpen && slug && (
         <HistoryPanel
           slug={slug}

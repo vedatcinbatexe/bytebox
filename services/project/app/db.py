@@ -9,6 +9,7 @@ database = client[os.environ.get("MONGO_DB", "bytebox")]
 projects = database["projects"]
 projects.create_index("owner_id")
 projects.create_index("tags")
+projects.create_index("forked_from")
 
 # One document per (project, user) star
 stars = database["stars"]
