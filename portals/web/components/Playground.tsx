@@ -10,6 +10,7 @@ import { MarkdownPanel } from './MarkdownPanel';
 import { PreviewPanel } from './PreviewPanel';
 import { ProjectTags } from './ProjectTags';
 import { ForksDialog } from './ForksDialog';
+import { CollaboratorsPanel } from './CollaboratorsPanel';
 import { CommentsDialog } from './CommentsDialog';
 import { EditorSettingsDialog } from './EditorSettingsDialog';
 import { TestsPanel } from './TestsPanel';
@@ -25,6 +26,8 @@ import { THEMES, setTheme } from '@/lib/theme';
 import { DEFAULT_SIZES, clampSize, loadSizes, saveSizes, type PanelSizes } from '@/lib/layout';
 import { errorMarkers, type ErrorMarker } from '@/lib/errorLocations';
 import { splitArgs } from '@/lib/args';
+import { useCollab } from '@/lib/useCollab';
+import type { SharedState } from '@/lib/collab';
 import {
   DEFAULT_EDITOR_SETTINGS,
   loadEditorSettings,
@@ -67,6 +70,11 @@ import {
   fetchProject,
   setStar,
   setTags,
+  createInvite,
+  joinProject,
+  removeCollaborator,
+  stopInvites,
+  type Collaborator,
   setVisibility,
   updateProject,
   type SavedProject,
@@ -125,6 +133,29 @@ function workspaceFor(saved: SavedProject): Workspace {
   };
 }
 
+type AsideTab = 'output' | 'tests' | 'preview' | 'people';
+
+// The part of a workspace that is shared in a live session
+function toShared({ project, title, stdin, args }: Workspace): SharedState {
+  return { files: project.files, folders: project.folders, title, stdin, args };
+}
+
+// The workspace after the shared project changed; tabs of files that are gone are closed
+function withShared(workspace: Workspace, shared: SharedState): Workspace {
+  const openTabs = workspace.openTabs.filter((path) => path in shared.files);
+  const activePath =
+    workspace.activePath && workspace.activePath in shared.files ? workspace.activePath : (openTabs[0] ?? null);
+  return {
+    ...workspace,
+    project: { files: shared.files, folders: shared.folders },
+    title: shared.title,
+    stdin: shared.stdin,
+    args: shared.args,
+    openTabs,
+    activePath,
+  };
+}
+
 // What gets saved; used to detect unsaved changes
 function snapshot({ title, project, stdin, args }: Workspace): string {
   return JSON.stringify({ title, project, stdin, args });
@@ -142,17 +173,36 @@ function isUnauthenticated(error: unknown): boolean {
 interface Props {
   // Shared project to open; without it the local workspace (localStorage) is used
   slug?: string;
+  // Token from an invite link (?invite=…): joins the project as a collaborator
+  invite?: string;
 }
 
-export function Playground({ slug }: Props) {
+export function Playground({ slug, invite }: Props) {
   const router = useRouter();
   const { user, loading: userLoading } = useMe();
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
-  const [workspace, setWorkspace] = useState<Workspace>(STARTER_WORKSPACE);
+  const [workspace, setWorkspaceState] = useState<Workspace>(STARTER_WORKSPACE);
+  // The latest workspace, also between renders (remote edits arrive outside React)
+  const workspaceRef = useRef<Workspace>(STARTER_WORKSPACE);
+  const sendLocalChange = useRef<(previous: SharedState, next: SharedState) => void>(() => {});
+
+  // Every change to the workspace goes through here, so a live session can send exactly what changed
+  function setWorkspace(change: Workspace | ((current: Workspace) => Workspace)) {
+    const previous = workspaceRef.current;
+    const next = typeof change === 'function' ? change(previous) : change;
+    workspaceRef.current = next;
+    setWorkspaceState(next);
+    sendLocalChange.current(toShared(previous), toShared(next));
+  }
   const [loaded, setLoaded] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [isOwner, setIsOwner] = useState(false);
+  // The owner and invited collaborators can edit (together, live) and save
+  const [canEdit, setCanEdit] = useState(false);
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [editorReady, setEditorReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [autosave, setAutosave] = useState(true);
   const [autosaving, setAutosaving] = useState(false);
@@ -177,7 +227,7 @@ export function Playground({ slug }: Props) {
   const [commentCount, setCommentCount] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [cursor, setCursor] = useState<{ line: number; column: number } | null>(null);
-  const [asideTab, setAsideTab] = useState<'output' | 'tests' | 'preview'>('output');
+  const [asideTab, setAsideTab] = useState<AsideTab>('output');
   // Focus mode: hide the file explorer (⌘/Ctrl + B) and/or the output panel (⌘/Ctrl + J)
   const [hidden, setHidden] = useState({ explorer: false, aside: false });
   useEffect(() => {
@@ -200,7 +250,7 @@ export function Playground({ slug }: Props) {
     setPanelHidden(panel, (isHidden) => !isHidden);
   }
 
-  function showAside(tab: 'output' | 'tests' | 'preview') {
+  function showAside(tab: AsideTab) {
     setAsideTab(tab);
     setPanelHidden('aside', () => false);
   }
@@ -273,7 +323,89 @@ export function Playground({ slug }: Props) {
         })),
     );
   }, [markers, activePath]);
-  const hasUnsavedChanges = Boolean(slug) && loaded && snapshot(workspace) !== savedSnapshot;
+  // ---------- Live collaboration ----------
+  const collab = useCollab({
+    slug,
+    enabled: loaded && canEdit && Boolean(user),
+    user,
+    onRemote: (shared) => {
+      const next = withShared(workspaceRef.current, shared);
+      workspaceRef.current = next;
+      setWorkspaceState(next);
+    },
+  });
+  sendLocalChange.current = collab.localChange;
+  // In a live session the collab service saves for everyone
+  const live = collab.status === 'live';
+  useEffect(() => {
+    if (live) setSavedSnapshot(snapshot(workspace));
+  }, [live, workspace]);
+
+  // Edit the open file together, with everyone's cursors
+  useEffect(() => {
+    if (!live || !editorReady || !activePath || !editorRef.current || !monacoRef.current) return;
+    const unbind = collab.bind(monacoRef.current, editorRef.current, activePath);
+    return () => unbind?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, editorReady, activePath, activePath ? activePath in project.files : false]);
+
+  // Opened with an invite link: join (after logging in), then drop the token from the address
+  useEffect(() => {
+    if (!invite || !slug || !loaded || userLoading) return;
+    if (canEdit) {
+      router.replace(`/p/${slug}`);
+      return;
+    }
+    if (!user) {
+      setLoginPromptOpen(true);
+      return;
+    }
+    joinProject(slug, invite)
+      .then((joined) => {
+        setCanEdit(joined.canEdit);
+        setCollaborators(joined.collaborators);
+        showNotice('You joined as a collaborator 🎉 Edits are shared live.');
+        setAsideTab('people');
+        router.replace(`/p/${slug}`);
+      })
+      .catch((joinError) => showNotice(errorMessage(joinError), true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invite, slug, loaded, userLoading, user, canEdit]);
+
+  async function newInvite() {
+    if (!slug) return;
+    try {
+      setInviteToken(await createInvite(slug));
+    } catch (inviteError) {
+      showNotice(errorMessage(inviteError), true);
+    }
+  }
+
+  async function turnOffInvites() {
+    if (!slug) return;
+    try {
+      await stopInvites(slug);
+      setInviteToken(null);
+    } catch (inviteError) {
+      showNotice(errorMessage(inviteError), true);
+    }
+  }
+
+  async function removeMember(collaborator: Collaborator) {
+    if (!slug) return;
+    try {
+      await removeCollaborator(slug, collaborator.userId);
+      setCollaborators((current) => current.filter((other) => other.userId !== collaborator.userId));
+      if (collaborator.userId === user?.id) {
+        setCanEdit(false); // left the project
+        showNotice('You left the project');
+      }
+    } catch (removeError) {
+      showNotice(errorMessage(removeError), true);
+    }
+  }
+
+  const hasUnsavedChanges = Boolean(slug) && loaded && !live && snapshot(workspace) !== savedSnapshot;
 
   // Shared project: load it from the API. Local workspace: restore it from localStorage.
   useEffect(() => {
@@ -288,6 +420,9 @@ export function Playground({ slug }: Props) {
           setWorkspace(opened);
           setSavedSnapshot(snapshot(opened));
           setIsOwner(saved.ownedByMe);
+          setCanEdit(saved.canEdit);
+          setCollaborators(saved.collaborators);
+          setInviteToken(saved.inviteToken);
           setVisibilityState(saved.visibility);
           setOwnerLogin(saved.ownerLogin);
           setStars({ starCount: saved.starCount, starredByMe: saved.starredByMe });
@@ -318,7 +453,7 @@ export function Playground({ slug }: Props) {
 
   // Autosave your own project 2 seconds after the last change
   useEffect(() => {
-    if (!slug || !isOwner || !autosave || !hasUnsavedChanges || busy || autosaving) return;
+    if (!slug || !canEdit || !autosave || !hasUnsavedChanges || busy || autosaving) return;
     const timer = setTimeout(async () => {
       setAutosaving(true);
       try {
@@ -333,7 +468,7 @@ export function Playground({ slug }: Props) {
       }
     }, 2000);
     return () => clearTimeout(timer);
-  }, [workspace, slug, isOwner, autosave, hasUnsavedChanges, busy, autosaving]);
+  }, [workspace, slug, canEdit, autosave, hasUnsavedChanges, busy, autosaving]);
 
   function toggleAutosave(on: boolean) {
     setAutosave(on);
@@ -475,7 +610,8 @@ export function Playground({ slug }: Props) {
 
   function saveShortcut() {
     if (!canChange()) return;
-    if (slug && isOwner) void saveChanges();
+    if (slug && live) showNotice('Live session: changes are saved automatically for everyone.');
+    else if (slug && canEdit) void saveChanges();
     else if (slug) showNotice('This is someone else’s project. Fork it to save your own copy.');
     else showNotice('Your workspace is saved in this browser. Use Share to get a link.');
   }
@@ -554,12 +690,9 @@ export function Playground({ slug }: Props) {
     if (!slug && load(OLD_STORAGE_KEY)) {
       commands.push(action('restore-old', 'Open the workspace saved before the welcome project', restoreOldWorkspace));
     }
-    if (slug && isOwner) {
-      commands.push(
-        action('save', 'Save', () => void saveChanges(), '⌘S'),
-        action('history', 'Version history', () => setHistoryOpen(true)),
-      );
-    }
+    if (slug && canEdit && !live) commands.push(action('save', 'Save', () => void saveChanges(), '⌘S'));
+    if (slug && isOwner) commands.push(action('history', 'Version history', () => setHistoryOpen(true)));
+    if (slug && canEdit) commands.push(action('collaborators', 'Collaborators', () => showAside('people')));
     if (slug) commands.push(action('fork', 'Fork (make your own copy)', () => void fork()));
     commands.push(
       action('shortcuts', 'Keyboard shortcuts', () => setShortcutsOpen(true), '?'),
@@ -808,6 +941,7 @@ export function Playground({ slug }: Props) {
   const onEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+    setEditorReady(true);
     applyMonacoTheme(monaco, theme);
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => runRef.current());
     // The editor is read-only when signed out; typing asks the visitor to log in
@@ -882,6 +1016,28 @@ export function Playground({ slug }: Props) {
           </Link>
         )}
         {slug && <ProjectTags tags={tags} onChange={isOwner ? changeTags : undefined} />}
+        {live && collab.people.length > 1 && (
+          <button
+            onClick={() => showAside('people')}
+            className="flex items-center -space-x-1.5"
+            title={`Editing now: ${collab.people.map((person) => person.presence.user.login).join(', ')}`}
+          >
+            {collab.people.slice(0, 4).map((person) => (
+              <span
+                key={person.clientId}
+                className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-panel text-[11px] font-bold text-white"
+                style={{ backgroundColor: person.presence.user.color }}
+              >
+                {person.presence.user.login.slice(0, 1).toUpperCase()}
+              </span>
+            ))}
+            {collab.people.length > 4 && (
+              <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-panel bg-raised text-[10px] text-muted">
+                +{collab.people.length - 4}
+              </span>
+            )}
+          </button>
+        )}
         {notice && (
           <span className={`text-xs ${notice.isError ? 'text-danger' : 'text-success'}`}>{notice.text}</span>
         )}
@@ -922,12 +1078,20 @@ export function Playground({ slug }: Props) {
               ↺ Reset
             </button>
           )}
-          {slug && isOwner && (
+          {slug && canEdit && live && (
+            <span
+              className="rounded-full bg-success/15 px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-success"
+              title="Everyone's edits are shared live and saved automatically"
+            >
+              ● Live
+            </span>
+          )}
+          {slug && canEdit && !live && (
             <button onClick={saveChanges} disabled={busy || !hasUnsavedChanges} className={SECONDARY_BUTTON}>
               {busy || autosaving ? 'Saving…' : hasUnsavedChanges ? '● Save' : '✓ Saved'}
             </button>
           )}
-          {slug && isOwner && (
+          {slug && canEdit && !live && (
             <label className="flex items-center gap-1 text-xs whitespace-nowrap text-muted" title="Save 2 seconds after you stop typing">
               <input type="checkbox" checked={autosave} onChange={(event) => toggleAutosave(event.target.checked)} />
               Autosave
@@ -1060,7 +1224,7 @@ export function Playground({ slug }: Props) {
           to run code, edit files and use the terminal.
         </p>
       )}
-      {user && slug && !isOwner && (
+      {user && slug && loaded && !canEdit && (
         <p className="border-b border-line bg-info/10 px-4 py-1.5 text-xs text-info">
           You&apos;re viewing someone else&apos;s project. You can edit and run it, but to save changes,{' '}
           <button onClick={fork} className="underline">
@@ -1257,7 +1421,14 @@ export function Playground({ slug }: Props) {
           style={{ '--aside-w': `${sizes.aside}px` } as React.CSSProperties}
         >
           <div role="tablist" className="flex shrink-0 border-b border-line text-sm">
-            {(hasPreview ? (['output', 'tests', 'preview'] as const) : (['output', 'tests'] as const)).map((tab) => (
+            {(
+              [
+                'output',
+                'tests',
+                ...(hasPreview ? (['preview'] as const) : []),
+                ...(slug && canEdit ? (['people'] as const) : []),
+              ] as AsideTab[]
+            ).map((tab) => (
               <button
                 key={tab}
                 role="tab"
@@ -1267,11 +1438,32 @@ export function Playground({ slug }: Props) {
                   asideTab === tab ? 'border-accent text-fg' : 'border-transparent text-muted hover:text-fg'
                 }`}
               >
-                {tab === 'output' ? 'Output' : tab === 'tests' ? '🧪 Tests' : '👁 Preview'}
+                {tab === 'output'
+                  ? 'Output'
+                  : tab === 'tests'
+                    ? '🧪 Tests'
+                    : tab === 'preview'
+                      ? '👁 Preview'
+                      : `👥 Collaborators${collab.people.length > 1 ? ` · ${collab.people.length}` : ''}`}
               </button>
             ))}
           </div>
-          {asideTab === 'tests' ? (
+          {asideTab === 'people' && slug && canEdit ? (
+            <CollaboratorsPanel
+              slug={slug}
+              status={collab.status}
+              people={collab.people}
+              ownerLogin={ownerLogin}
+              collaborators={collaborators}
+              isOwner={isOwner}
+              myUserId={user?.id ?? null}
+              inviteToken={inviteToken}
+              onCreateInvite={newInvite}
+              onStopInvites={turnOffInvites}
+              onRemove={removeMember}
+              onOpenFile={(path) => openFile(path)}
+            />
+          ) : asideTab === 'tests' ? (
             <TestsPanel
               tests={parseTests(project.files)}
               onChange={(tests) =>
@@ -1339,7 +1531,7 @@ export function Playground({ slug }: Props) {
         cursor={activePath ? cursor : null}
         run={run}
         saveState={
-          !user ? 'guest' : !slug ? 'local' : !isOwner ? 'other' : hasUnsavedChanges ? 'unsaved' : 'saved'
+          !user ? 'guest' : !slug ? 'local' : !canEdit ? 'other' : live ? 'live' : hasUnsavedChanges ? 'unsaved' : 'saved'
         }
         onShowShortcuts={() => setShortcutsOpen(true)}
         onShowSettings={() => setSettingsOpen(true)}

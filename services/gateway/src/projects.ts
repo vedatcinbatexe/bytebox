@@ -25,6 +25,9 @@ export interface Project extends ProjectInput {
   forkCount: number;
   forkedFromTitle: string | null;
   commentCount: number;
+  canEdit: boolean;
+  collaborators: { userId: string; login: string | null; joinedAt: string }[];
+  inviteToken: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -135,6 +138,35 @@ export async function deleteComment(slug: string, commentId: string, userId: str
   if (!(await call<object>('DELETE', path, { userId }))) {
     throw new GraphQLError('Comment not found', { extensions: { code: 'NOT_FOUND' } });
   }
+}
+
+// ---------- Collaborators ----------
+
+export async function createInvite(slug: string, userId: string): Promise<string> {
+  const state = await call<{ inviteToken: string }>('POST', `/projects/${encodeURIComponent(slug)}/invite`, { userId });
+  if (!state) throw new GraphQLError('Project not found', { extensions: { code: 'NOT_FOUND' } });
+  return state.inviteToken;
+}
+
+export async function stopInvites(slug: string, userId: string): Promise<void> {
+  await call('DELETE', `/projects/${encodeURIComponent(slug)}/invite`, { userId });
+}
+
+export async function joinProject(slug: string, token: string, userId: string, userLogin: string): Promise<Project> {
+  const project = await call<Project>('POST', `/projects/${encodeURIComponent(slug)}/join`, {
+    body: { token },
+    userId,
+    userLogin,
+  });
+  if (!project) {
+    throw new GraphQLError('This invite link is not valid anymore', { extensions: { code: 'NOT_FOUND' } });
+  }
+  return project;
+}
+
+export async function removeCollaborator(slug: string, collaboratorId: string, userId: string): Promise<void> {
+  const path = `/projects/${encodeURIComponent(slug)}/collaborators/${encodeURIComponent(collaboratorId)}`;
+  await call('DELETE', path, { userId });
 }
 
 export async function popularTags(): Promise<{ tag: string; count: number }[]> {

@@ -25,6 +25,9 @@ export interface SavedProject {
   forkCount: number;
   forkedFromTitle: string | null;
   commentCount: number;
+  canEdit: boolean;
+  collaborators: Collaborator[];
+  inviteToken: string | null;
 }
 
 export interface ProjectSummary {
@@ -55,6 +58,9 @@ interface ApiProject {
   forkCount: number;
   forkedFromTitle: string | null;
   commentCount: number;
+  canEdit: boolean;
+  collaborators: Collaborator[];
+  inviteToken: string | null;
 }
 
 export interface ProjectInput {
@@ -65,7 +71,7 @@ export interface ProjectInput {
 }
 
 const PROJECT_FIELDS =
-  'slug title files { path content } folders stdin args forkedFrom ownedByMe visibility ownerLogin starCount starredByMe tags forkCount forkedFromTitle commentCount';
+  'slug title files { path content } folders stdin args forkedFrom ownedByMe visibility ownerLogin starCount starredByMe tags forkCount forkedFromTitle commentCount canEdit collaborators { userId login joinedAt } inviteToken';
 const SUMMARY_FIELDS = 'slug title fileCount updatedAt visibility ownerLogin starCount tags';
 
 function fromApi(project: ApiProject): SavedProject {
@@ -88,6 +94,9 @@ function fromApi(project: ApiProject): SavedProject {
     forkCount: project.forkCount,
     forkedFromTitle: project.forkedFromTitle,
     commentCount: project.commentCount,
+    canEdit: project.canEdit,
+    collaborators: project.collaborators,
+    inviteToken: project.inviteToken,
   };
 }
 
@@ -289,4 +298,40 @@ export async function addComment(slug: string, text: string): Promise<Comment> {
 
 export async function deleteComment(slug: string, id: string): Promise<void> {
   await request(`mutation DeleteComment($slug: String!, $id: ID!) { deleteComment(slug: $slug, id: $id) }`, { slug, id });
+}
+
+// ---------- Live collaboration ----------
+
+export interface Collaborator {
+  userId: string;
+  login: string | null;
+  joinedAt: string;
+}
+
+// A new invite link token (the old link stops working)
+export async function createInvite(slug: string): Promise<string> {
+  const data = await request<{ createInvite: string }>(
+    `mutation CreateInvite($slug: String!) { createInvite(slug: $slug) }`,
+    { slug },
+  );
+  return data.createInvite;
+}
+
+export async function stopInvites(slug: string): Promise<void> {
+  await request(`mutation StopInvites($slug: String!) { stopInvites(slug: $slug) }`, { slug });
+}
+
+export async function joinProject(slug: string, token: string): Promise<SavedProject> {
+  const data = await request<{ joinProject: ApiProject }>(
+    `mutation Join($slug: String!, $token: String!) { joinProject(slug: $slug, token: $token) { ${PROJECT_FIELDS} } }`,
+    { slug, token },
+  );
+  return fromApi(data.joinProject);
+}
+
+export async function removeCollaborator(slug: string, userId: string): Promise<void> {
+  await request(`mutation Remove($slug: String!, $userId: ID!) { removeCollaborator(slug: $slug, userId: $userId) }`, {
+    slug,
+    userId,
+  });
 }

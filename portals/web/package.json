@@ -17,7 +17,10 @@
     "next": "^16.4.2",
     "prettier": "^3.9.10",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "y-protocols": "^1.0.7",
+    "y-websocket": "^3.1.0",
+    "yjs": "^13.6.33"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

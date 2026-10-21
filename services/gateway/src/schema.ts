@@ -23,6 +23,10 @@ import {
   setTags,
   popularTags,
   listForks,
+  createInvite,
+  stopInvites,
+  joinProject,
+  removeCollaborator,
   listComments,
   addComment,
   deleteComment,
@@ -109,6 +113,14 @@ const typeDefs = /* GraphQL */ `
     renameProject(slug: String!, title: String!): Project!
     "public (listed on Explore), unlisted (anyone with the link) or private (only you)"
     setProjectVisibility(slug: String!, visibility: Visibility!): Project!
+    "Make a new invite link for a project you own (the old one stops working); returns its token"
+    createInvite(slug: String!): String!
+    "Turn the invite link off"
+    stopInvites(slug: String!): Boolean!
+    "Become a collaborator with an invite link's token"
+    joinProject(slug: String!, token: String!): Project!
+    "Remove a collaborator from your project, or leave a project yourself"
+    removeCollaborator(slug: String!, userId: ID!): Boolean!
     "Comment on a project you can see (1-1000 characters)"
     addComment(slug: String!, text: String!): Comment!
     "Delete your comment, or any comment on your project"
@@ -195,6 +207,12 @@ const typeDefs = /* GraphQL */ `
     runs: Int!
   }
 
+  type Collaborator {
+    userId: ID!
+    login: String
+    joinedAt: String!
+  }
+
   type Comment {
     id: ID!
     text: String!
@@ -275,6 +293,12 @@ const typeDefs = /* GraphQL */ `
     commentCount: Int!
     "Oldest first"
     comments: [Comment!]!
+    "True for the owner and invited collaborators (they edit live together)"
+    canEdit: Boolean!
+    "People the owner invited (only shown to the owner and collaborators)"
+    collaborators: [Collaborator!]!
+    "Token of the invite link (only shown to the owner; null when invites are off)"
+    inviteToken: String
     title: String!
     files: [ProjectFile!]!
     folders: [String!]!
@@ -415,6 +439,8 @@ export const schema = createSchema<Context>({
       forks: (project: Project, _: unknown, { user }: Context) => listForks(project.slug, user?.id),
       commentCount: (project: Project) => project.commentCount ?? 0,
       args: (project: Project) => project.args ?? '',
+      canEdit: (project: Project) => project.canEdit ?? false,
+      collaborators: (project: Project) => project.collaborators ?? [],
       comments: (project: Project, _: unknown, { user }: Context) => listComments(project.slug, user?.id),
     },
 
@@ -444,6 +470,23 @@ export const schema = createSchema<Context>({
         const signedIn = requireUser(user);
         await limitSaves(signedIn.id);
         return setVisibility(slug, visibility.toLowerCase() as Visibility, signedIn.id);
+      },
+
+      createInvite: async (_, { slug }: { slug: string }, { user }) => createInvite(slug, requireUser(user).id),
+
+      stopInvites: async (_, { slug }: { slug: string }, { user }) => {
+        await stopInvites(slug, requireUser(user).id);
+        return true;
+      },
+
+      joinProject: async (_, { slug, token }: { slug: string; token: string }, { user }) => {
+        const signedIn = requireUser(user);
+        return joinProject(slug, token, signedIn.id, signedIn.login);
+      },
+
+      removeCollaborator: async (_, { slug, userId }: { slug: string; userId: string }, { user }) => {
+        await removeCollaborator(slug, userId, requireUser(user).id);
+        return true;
       },
 
       addComment: async (_, { slug, text }: { slug: string; text: string }, { user }) => {

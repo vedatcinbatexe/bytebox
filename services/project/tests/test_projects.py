@@ -335,3 +335,44 @@ def test_arguments_are_saved_and_versioned(client):
     version = client.get(f"/projects/{slug}/versions", headers=ALICE).json()[0]
     restored = client.post(f"/projects/{slug}/versions/{version['id']}/restore", headers=ALICE).json()
     assert restored["args"] == "--name Ada"
+
+
+def test_invite_link_makes_a_collaborator_who_can_save(client):
+    slug = create(client)["slug"]
+    assert client.put(f"/projects/{slug}", json=PROJECT, headers=BOB).status_code == 403
+
+    token = client.post(f"/projects/{slug}/invite", headers=ALICE).json()["inviteToken"]
+    assert client.post(f"/projects/{slug}/join", json={"token": "wrong"}, headers=BOB).status_code == 404
+    joined = client.post(f"/projects/{slug}/join", json={"token": token}, headers={**BOB, "X-User-Login": "bob"})
+    assert joined.status_code == 200, joined.text
+    assert joined.json()["canEdit"] is True
+    assert joined.json()["inviteToken"] is None  # only the owner sees the link
+    assert [c["login"] for c in joined.json()["collaborators"]] == ["bob"]
+
+    assert client.put(f"/projects/{slug}", json={**PROJECT, "title": "By Bob"}, headers=BOB).status_code == 200
+    assert [p["slug"] for p in client.get("/projects", headers=BOB).json()] == [slug]  # shows in Bob's projects
+    # Joining twice changes nothing
+    client.post(f"/projects/{slug}/join", json={"token": token}, headers=BOB)
+    assert len(client.get(f"/projects/{slug}", headers=ALICE).json()["collaborators"]) == 1
+
+
+def test_collaborators_are_private_and_can_be_removed(client):
+    slug = create(client)["slug"]
+    token = client.post(f"/projects/{slug}/invite", headers=ALICE).json()["inviteToken"]
+    client.post(f"/projects/{slug}/join", json={"token": token}, headers=BOB)
+    client.patch(f"/projects/{slug}", json={"visibility": "private"}, headers=ALICE)
+
+    assert client.get(f"/projects/{slug}", headers=BOB).status_code == 200  # collaborators see private projects
+    stranger = client.get(f"/projects/{slug}", headers={"X-User-Id": "carol-id"})
+    assert stranger.status_code == 404
+    client.patch(f"/projects/{slug}", json={"visibility": "public"}, headers=ALICE)
+    public_view = client.get(f"/projects/{slug}").json()
+    assert public_view["collaborators"] == [] and public_view["canEdit"] is False
+
+    assert client.patch(f"/projects/{slug}", json={"visibility": "private"}, headers=BOB).status_code == 403  # owner only
+    assert client.delete(f"/projects/{slug}/collaborators/bob-id", headers={"X-User-Id": "carol-id"}).status_code == 403
+    assert client.delete(f"/projects/{slug}/collaborators/bob-id", headers=BOB).status_code == 204  # leaving
+    assert client.put(f"/projects/{slug}", json=PROJECT, headers=BOB).status_code == 403
+
+    client.delete(f"/projects/{slug}/invite", headers=ALICE)
+    assert client.post(f"/projects/{slug}/join", json={"token": token}, headers=BOB).status_code == 404

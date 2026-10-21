@@ -6,7 +6,7 @@ interface Props {
   lines: number;
   cursor: { line: number; column: number } | null;
   run: Run | null;
-  saveState: 'saved' | 'unsaved' | 'local' | 'guest' | 'other';
+  saveState: 'saved' | 'unsaved' | 'local' | 'guest' | 'other' | 'live';
   onShowShortcuts: () => void;
   onShowSettings: () => void;
   hidden: { explorer: boolean; aside: boolean };
@@ -34,6 +34,7 @@ const SAVE_LABELS = {
   local: 'Saved in this browser',
   guest: 'Guest (read-only)',
   other: 'Someone else’s project · fork to save',
+  live: '● Live · saved for everyone',
 };
 
 // Thin bar at the bottom of the IDE
