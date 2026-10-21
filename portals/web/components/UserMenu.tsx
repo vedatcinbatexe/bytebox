@@ -99,7 +99,7 @@ export function UserMenu({ user, loading }: Props) {
           <Link href="/explore" role="menuitem" className="block px-3 py-2 hover:bg-raised">
             🌍 Explore
           </Link>
-          <Link href="/" role="menuitem" className="block px-3 py-2 hover:bg-raised">
+          <Link href="/playground" role="menuitem" className="block px-3 py-2 hover:bg-raised">
             ✏️ Workspace
           </Link>
           <a

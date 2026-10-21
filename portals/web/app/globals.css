@@ -130,3 +130,89 @@
 * {
   scrollbar-color: var(--line-strong) transparent;
 }
+
+/* ---------- Landing page animations (app/page.tsx, components/landing) ---------- */
+
+@keyframes landing-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.landing-marquee {
+  animation: landing-marquee 30s linear infinite;
+}
+
+/* A request travelling through the services */
+@keyframes landing-packet {
+  from {
+    left: 0%;
+    opacity: 0;
+  }
+  10%,
+  90% {
+    opacity: 1;
+  }
+  to {
+    left: 100%;
+    opacity: 0;
+  }
+}
+.landing-packet {
+  animation: landing-packet 4s ease-in-out infinite;
+}
+
+@keyframes landing-float {
+  50% {
+    transform: translateY(-8px);
+  }
+}
+.landing-float {
+  animation: landing-float 6s ease-in-out infinite;
+}
+
+@keyframes landing-glow {
+  50% {
+    opacity: 0.35;
+    transform: scale(1.08);
+  }
+}
+.landing-glow {
+  animation: landing-glow 8s ease-in-out infinite;
+}
+
+@keyframes landing-blink {
+  50% {
+    opacity: 0;
+  }
+}
+.landing-caret {
+  animation: landing-blink 1s steps(1) infinite;
+}
+
+/* Fades in when scrolled into view (components/landing/Reveal.tsx) */
+.landing-reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 0.7s ease,
+    transform 0.7s ease;
+}
+.landing-reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-marquee,
+  .landing-packet,
+  .landing-float,
+  .landing-glow,
+  .landing-caret {
+    animation: none;
+  }
+  .landing-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
