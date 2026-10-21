@@ -4,7 +4,8 @@ import { ResizeHandle } from './ResizeHandle';
 import { useStoredSize } from '@/lib/useStoredSize';
 import { useEffect, useRef, useState } from 'react';
 import { AnsiText } from './OutputPanel';
-import type { ServerStatus } from '@/lib/useDevServer';
+import { ApiTester } from './ApiTester';
+import type { ApiRequest, ApiResponse, ServerStatus } from '@/lib/useDevServer';
 
 interface Props {
   framework: string; // what the project looks like, e.g. "Spring Boot"
@@ -14,6 +15,8 @@ interface Props {
   log: string;
   onStart: () => void;
   onStop: () => void;
+  files: Record<string, string>; // for the API tester's list of endpoints
+  onSend: (request: ApiRequest) => Promise<ApiResponse>;
 }
 
 const BADGE: Record<ServerStatus, { text: string; className: string }> = {
@@ -24,7 +27,9 @@ const BADGE: Record<ServerStatus, { text: string; className: string }> = {
 };
 
 // The 🖥 Server tab: start/stop the project's server, try it in a preview and read its log
-export function ServerPanel({ framework, status, runningFramework, previewUrl, log, onStart, onStop }: Props) {
+export function ServerPanel(props: Props) {
+  const { framework, status, runningFramework, previewUrl, log, onStart, onStop } = props;
+  const [view, setView] = useState<'preview' | 'api'>('preview');
   const [path, setPath] = useState('/');
   const [reloads, setReloads] = useState(0);
   const logRef = useRef<HTMLDivElement>(null);
@@ -43,6 +48,19 @@ export function ServerPanel({ framework, status, runningFramework, previewUrl, l
       <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2 text-xs">
         <span className="font-semibold">{runningFramework ?? framework}</span>
         <span className={`rounded px-2 py-0.5 ${badge.className}`}>{badge.text}</span>
+        <span role="radiogroup" aria-label="View" className="flex overflow-hidden rounded border border-line-strong">
+          {(['preview', 'api'] as const).map((option) => (
+            <button
+              key={option}
+              role="radio"
+              aria-checked={view === option}
+              onClick={() => setView(option)}
+              className={`px-2 py-0.5 ${view === option ? 'bg-accent text-accent-fg' : 'text-muted hover:bg-raised'}`}
+            >
+              {option === 'preview' ? 'Preview' : 'API'}
+            </button>
+          ))}
+        </span>
         <span className="ml-auto flex gap-2">
           <button
             onClick={onStart}
@@ -60,7 +78,9 @@ export function ServerPanel({ framework, status, runningFramework, previewUrl, l
         </span>
       </div>
 
-      {pageUrl ? (
+      {view === 'api' ? (
+        <ApiTester files={props.files} running={status === 'running'} send={props.onSend} />
+      ) : pageUrl ? (
         <>
           <form
             className="flex gap-1 border-b border-line px-2 py-1.5 text-xs"
