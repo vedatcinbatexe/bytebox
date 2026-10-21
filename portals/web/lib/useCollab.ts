@@ -5,17 +5,22 @@ import type { OnMount } from '@monaco-editor/react';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import type { User } from './auth';
-import { COLLAB_URL, colorFor, readShared, writeLocalChanges, type Presence, type SharedState } from './collab';
+import {
+  COLLAB_URL,
+  colorFor,
+  distinctPeople,
+  readShared,
+  writeLocalChanges,
+  type Person,
+  type Presence,
+  type SharedState,
+} from './collab';
 import { bindEditor } from './monacoBinding';
 
 // connecting → live (in sync with everyone) → offline (connection lost, retrying)
 export type CollabStatus = 'off' | 'connecting' | 'live' | 'offline';
 
-export interface Person {
-  clientId: number;
-  presence: Presence;
-  isMe: boolean;
-}
+export type { Person };
 
 interface Options {
   slug?: string;
@@ -67,15 +72,9 @@ export function useCollab({ slug, enabled, user, onRemote }: Options) {
       if (current.synced && origin !== LOCAL) onRemoteRef.current(readShared(doc));
     });
 
-    const updatePeople = () => {
-      const list: Person[] = [];
-      provider.awareness.getStates().forEach((state, clientId) => {
-        if ((state as Partial<Presence>).user) {
-          list.push({ clientId, presence: state as Presence, isMe: clientId === doc.clientID });
-        }
-      });
-      setPeople(list.sort((a, b) => Number(b.isMe) - Number(a.isMe) || a.presence.user.login.localeCompare(b.presence.user.login)));
-    };
+    // One entry per account, even if someone has the project open in several tabs
+    const updatePeople = () =>
+      setPeople(distinctPeople(provider.awareness.getStates() as Map<number, Partial<Presence>>, doc.clientID, user.id));
     provider.awareness.on('change', updatePeople);
     updatePeople();
 

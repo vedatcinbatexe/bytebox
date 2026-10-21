@@ -110,9 +110,11 @@ export function bindEditor(
   function renderCursors() {
     const people: { clientId: number; name: string; color: string }[] = [];
     const ranges: Parameters<typeof decorations.set>[0][number][] = [];
+    const myUserId = (awareness.getLocalState() as Partial<Presence> | null)?.user?.id;
     awareness.getStates().forEach((state, clientId) => {
       const presence = state as Partial<Presence>;
-      if (clientId === doc.clientID || !presence.user) return;
+      // Only other people: not this tab, and not your own other tabs
+      if (clientId === doc.clientID || !presence.user || presence.user.id === myUserId) return;
       people.push({ clientId, name: presence.user.login || presence.user.name, color: presence.user.color });
       const cursor = presence.cursor;
       if (!cursor || cursor.path !== path) return;

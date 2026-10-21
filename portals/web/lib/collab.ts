@@ -94,3 +94,35 @@ export interface Presence {
   // Open file and selection; positions are Yjs relative positions (JSON), so they move with edits
   cursor?: { path: string; anchor: unknown; head: unknown } | null;
 }
+
+export interface Person {
+  clientId: number;
+  presence: Presence;
+  isMe: boolean;
+  tabs: number; // the same account can be open in several tabs or windows
+}
+
+// One entry per account (not per tab), you first, then by login.
+// For each account it keeps the tab with a cursor (for "which file"), and this tab for you.
+export function distinctPeople(
+  states: Map<number, Partial<Presence>>,
+  myClientId: number,
+  myUserId: string,
+): Person[] {
+  const byUser = new Map<string, Person>();
+  states.forEach((state, clientId) => {
+    if (!state.user) return;
+    const presence = state as Presence;
+    const existing = byUser.get(presence.user.id);
+    const better =
+      !existing ||
+      clientId === myClientId ||
+      (existing.clientId !== myClientId && !existing.presence.cursor && Boolean(presence.cursor));
+    const tabs = (existing?.tabs ?? 0) + 1;
+    if (better) byUser.set(presence.user.id, { clientId, presence, isMe: presence.user.id === myUserId, tabs });
+    else existing.tabs = tabs;
+  });
+  return [...byUser.values()].sort(
+    (a, b) => Number(b.isMe) - Number(a.isMe) || a.presence.user.login.localeCompare(b.presence.user.login),
+  );
+}

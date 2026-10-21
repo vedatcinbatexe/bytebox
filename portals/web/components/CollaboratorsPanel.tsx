@@ -86,6 +86,7 @@ export function CollaboratorsPanel(props: Props) {
                   <p className="truncate font-medium">
                     {user.name || user.login}
                     {person.isMe && <span className="text-muted"> (you)</span>}
+                    {person.tabs > 1 && <span className="text-xs text-subtle"> · {person.tabs} tabs</span>}
                   </p>
                   {cursor?.path ? (
                     <button
