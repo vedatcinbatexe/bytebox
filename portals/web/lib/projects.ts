@@ -14,6 +14,7 @@ export interface SavedProject {
   title: string;
   project: Project;
   stdin: string;
+  args: string;
   forkedFrom: string | null;
   ownedByMe: boolean;
   visibility: Visibility;
@@ -43,6 +44,7 @@ interface ApiProject {
   files: { path: string; content: string }[];
   folders: string[];
   stdin: string;
+  args: string;
   forkedFrom: string | null;
   ownedByMe: boolean;
   visibility: Visibility;
@@ -59,10 +61,11 @@ export interface ProjectInput {
   title: string;
   project: Project;
   stdin: string;
+  args?: string; // command-line arguments as typed
 }
 
 const PROJECT_FIELDS =
-  'slug title files { path content } folders stdin forkedFrom ownedByMe visibility ownerLogin starCount starredByMe tags forkCount forkedFromTitle commentCount';
+  'slug title files { path content } folders stdin args forkedFrom ownedByMe visibility ownerLogin starCount starredByMe tags forkCount forkedFromTitle commentCount';
 const SUMMARY_FIELDS = 'slug title fileCount updatedAt visibility ownerLogin starCount tags';
 
 function fromApi(project: ApiProject): SavedProject {
@@ -74,6 +77,7 @@ function fromApi(project: ApiProject): SavedProject {
       folders: project.folders,
     },
     stdin: project.stdin,
+    args: project.args,
     forkedFrom: project.forkedFrom,
     ownedByMe: project.ownedByMe,
     visibility: project.visibility,
@@ -87,12 +91,13 @@ function fromApi(project: ApiProject): SavedProject {
   };
 }
 
-function toApi({ title, project, stdin }: ProjectInput) {
+function toApi({ title, project, stdin, args = '' }: ProjectInput) {
   return {
     title: title.trim() || 'Untitled project',
     files: Object.entries(project.files).map(([path, content]) => ({ path, content })),
     folders: project.folders,
     stdin,
+    args,
   };
 }
 

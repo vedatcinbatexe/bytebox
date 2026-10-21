@@ -24,6 +24,7 @@ import { EmbedDialog } from './EmbedDialog';
 import { THEMES, setTheme } from '@/lib/theme';
 import { DEFAULT_SIZES, clampSize, loadSizes, saveSizes, type PanelSizes } from '@/lib/layout';
 import { errorMarkers, type ErrorMarker } from '@/lib/errorLocations';
+import { splitArgs } from '@/lib/args';
 import {
   DEFAULT_EDITOR_SETTINGS,
   loadEditorSettings,
@@ -90,6 +91,7 @@ interface Workspace {
   openTabs: string[];
   activePath: string | null;
   stdin: string;
+  args: string; // command-line arguments as typed
 }
 
 const STARTER_WORKSPACE: Workspace = {
@@ -98,6 +100,7 @@ const STARTER_WORKSPACE: Workspace = {
   openTabs: [STARTER_FILE],
   activePath: STARTER_FILE,
   stdin: 'Bytebox',
+  args: '',
 };
 
 // Open the first runnable file, preferring main.* (Main.java for Java)
@@ -115,12 +118,13 @@ function workspaceFor(saved: SavedProject): Workspace {
     openTabs: first ? [first] : [],
     activePath: first,
     stdin: saved.stdin,
+    args: saved.args,
   };
 }
 
 // What gets saved; used to detect unsaved changes
-function snapshot({ title, project, stdin }: Workspace): string {
-  return JSON.stringify({ title, project, stdin });
+function snapshot({ title, project, stdin, args }: Workspace): string {
+  return JSON.stringify({ title, project, stdin, args });
 }
 
 function errorMessage(error: unknown): string {
@@ -244,7 +248,7 @@ export function Playground({ slug }: Props) {
     if (monacoRef.current) applyMonacoTheme(monacoRef.current, theme);
   }, [theme]);
 
-  const { title, project, openTabs, activePath, stdin } = workspace;
+  const { title, project, openTabs, activePath, stdin, args } = workspace;
 
   // Show the markers of the open file in the editor
   useEffect(() => {
@@ -359,7 +363,7 @@ export function Playground({ slug }: Props) {
   function currentInput() {
     const files = { ...project.files };
     if (activePath && editorRef.current) files[activePath] = editorRef.current.getValue();
-    return { title, project: { ...project, files }, stdin };
+    return { title, project: { ...project, files }, stdin, args };
   }
 
   async function copyLink(url: string) {
@@ -743,7 +747,7 @@ export function Playground({ slug }: Props) {
     );
 
     try {
-      const created = await createRun(files, activePath, stdin);
+      const created = await createRun(files, activePath, stdin, splitArgs(args));
       setRun(created);
       closeSubscription.current = watchRun(
         created.id,
@@ -1255,6 +1259,20 @@ export function Playground({ slug }: Props) {
           ) : (
             <>
               <section className="border-b border-line">
+                <label className="flex items-center gap-2 px-4 pt-2">
+                  <span className="text-xs font-semibold tracking-wide whitespace-nowrap text-muted uppercase">Arguments</span>
+                  <input
+                    value={args}
+                    onChange={(event) => update({ args: event.target.value })}
+                    readOnly={!user}
+                    onClick={() => canChange()}
+                    spellCheck={false}
+                    maxLength={1000}
+                    placeholder={'e.g. --name "Ada Lovelace" 3'}
+                    title="Command-line arguments (sys.argv, process.argv, args[] …). Quotes keep spaces together."
+                    className="min-w-0 flex-1 rounded border border-line bg-transparent px-2 py-0.5 font-mono text-sm outline-none focus:border-line-strong"
+                  />
+                </label>
                 <h2 className="px-4 pt-2 text-xs font-semibold tracking-wide text-muted uppercase">
                   Input (stdin)
                 </h2>

@@ -1,5 +1,6 @@
 import io
 import re
+import shlex
 import socket
 import tarfile
 import threading
@@ -57,7 +58,7 @@ def run_code(language, code, stdin=""):
     return run_project(language, [{"path": entry, "content": code}], entry, stdin)
 
 
-def run_project(language, files, entry_file, stdin="", on_start=None):
+def run_project(language, files, entry_file, stdin="", on_start=None, args=()):
     """Run entry_file from a multi-file project in a fresh, locked-down container.
 
     on_start(output) is called once the program starts; output.stdout / output.stderr
@@ -76,7 +77,7 @@ def run_project(language, files, entry_file, stdin="", on_start=None):
 
     container = client.containers.create(
         image=config["image"],
-        command=["sh", "-c", build_script(config, files, entry_file, len(archive))],
+        command=["sh", "-c", build_script(config, files, entry_file, len(archive), args)],
         # The project arrives as a tar archive on stdin (see send_archive)
         stdin_open=True,
         working_dir="/tmp",
@@ -179,7 +180,7 @@ def validate_project(files, entry_file):
     return None
 
 
-def build_script(config, files, entry_file, archive_size):
+def build_script(config, files, entry_file, archive_size, args=()):
     # Paths are validated against SAFE_PATH, so they are safe to put in a shell command.
     # head reads exactly the archive, so we never wait for stdin to be closed.
     steps = [f"head -c {archive_size} | tar -x -C /tmp -f -", "cd /tmp/project"]
@@ -196,7 +197,9 @@ def build_script(config, files, entry_file, archive_size):
             and (not config.get("same_folder") or file["path"].rpartition("/")[0] == folder)
         ]
         steps.append(config["compile"].format(entry=entry_file, sources=" ".join([entry_file, *others])))
-    steps.append(config["run"].format(entry=entry_file) + " < /tmp/.stdin")
+    # Arguments come from the user, so quote each one for the shell
+    arguments = "".join(f" {shlex.quote(arg)}" for arg in args)
+    steps.append(config["run"].format(entry=entry_file) + arguments + " < /tmp/.stdin")
     return " && ".join(steps)
 
 

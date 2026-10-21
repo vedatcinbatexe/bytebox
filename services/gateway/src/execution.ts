@@ -46,8 +46,9 @@ export async function createRun(
   entryFile: string,
   stdin: string,
   userId = '',
+  args: string[] = [],
 ): Promise<string> {
-  const response = await unary<{ runId: string }>('CreateRun', { files, entryFile, stdin, userId });
+  const response = await unary<{ runId: string }>('CreateRun', { files, entryFile, stdin, userId, args });
   return response.runId;
 }
 

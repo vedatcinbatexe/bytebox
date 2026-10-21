@@ -9,6 +9,8 @@ public static partial class ProjectRules
 {
     public const int MaxFiles = 50;
     public const int MaxProjectBytes = 256 * 1024;
+    public const int MaxArgs = 20;
+    public const int MaxArgLength = 200;
 
     private static readonly Dictionary<string, string> LanguagesByExtension = new()
     {
@@ -47,6 +49,10 @@ public static partial class ProjectRules
 
         if (request.Files.All(file => file.Path != request.EntryFile))
             return $"Entry file not found: {request.EntryFile}";
+        if (request.Args.Count > MaxArgs)
+            return $"A run can have at most {MaxArgs} arguments";
+        if (request.Args.Any(arg => arg.Length > MaxArgLength || arg.Contains('\0')))
+            return $"Arguments can be at most {MaxArgLength} characters each";
         if (LanguageFor(request.EntryFile) is null)
             return "Only .py, .js, .ts, .java, .cpp, .go and .rs files can be run";
         return null;

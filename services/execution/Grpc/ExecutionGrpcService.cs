@@ -30,6 +30,7 @@ public class ExecutionGrpcService(ExecutionDb db, RunQueue queue, IConnectionMul
             EntryFile = request.EntryFile,
             Files = request.Files.Select(file => new Data.ProjectFile { Path = file.Path, Content = file.Content }).ToList(),
             Stdin = request.Stdin,
+            Args = request.Args.ToList(),
             UserId = string.IsNullOrEmpty(request.UserId) ? null : request.UserId,
             CreatedAt = DateTime.UtcNow,
         };

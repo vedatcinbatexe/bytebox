@@ -12,6 +12,7 @@ public class ExecutionDb(DbContextOptions<ExecutionDb> options) : DbContext(opti
         {
             run.ToTable("runs");
             run.OwnsMany(r => r.Files, files => files.ToJson()); // stored as a jsonb column
+            run.Property(r => r.Args).HasDefaultValueSql("'{}'"); // older runs have no arguments
             run.HasIndex(r => r.UserId);
             run.HasIndex(r => r.CreatedAt);
         });

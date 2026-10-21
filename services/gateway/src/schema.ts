@@ -233,6 +233,8 @@ const typeDefs = /* GraphQL */ `
     "Path of the file to run; its extension decides the language"
     entryFile: String!
     stdin: String
+    "Command-line arguments (at most 20)"
+    args: [String!]
   }
 
   type ProjectFile {
@@ -277,6 +279,8 @@ const typeDefs = /* GraphQL */ `
     files: [ProjectFile!]!
     folders: [String!]!
     stdin: String!
+    "Command-line arguments as typed"
+    args: String!
     forkedFrom: String
     "True when the signed-in user owns this project"
     ownedByMe: Boolean!
@@ -289,6 +293,8 @@ const typeDefs = /* GraphQL */ `
     files: [FileInput!]!
     folders: [String!]!
     stdin: String!
+    "Command-line arguments as typed, e.g. --name Ada -v"
+    args: String
   }
 
   enum RunStatus {
@@ -408,6 +414,7 @@ export const schema = createSchema<Context>({
       forkCount: (project: Project) => project.forkCount ?? 0,
       forks: (project: Project, _: unknown, { user }: Context) => listForks(project.slug, user?.id),
       commentCount: (project: Project) => project.commentCount ?? 0,
+      args: (project: Project) => project.args ?? '',
       comments: (project: Project, _: unknown, { user }: Context) => listComments(project.slug, user?.id),
     },
 
@@ -493,7 +500,7 @@ export const schema = createSchema<Context>({
 
       createRun: async (
         _,
-        { input }: { input: { files: ProjectFile[]; entryFile: string; stdin?: string } },
+        { input }: { input: { files: ProjectFile[]; entryFile: string; stdin?: string; args?: string[] } },
         { user },
       ) => {
         const signedIn = requireUser(user);
@@ -505,7 +512,7 @@ export const schema = createSchema<Context>({
         }
 
         try {
-          const runId = await createRun(input.files, input.entryFile, input.stdin ?? '', signedIn.id);
+          const runId = await createRun(input.files, input.entryFile, input.stdin ?? '', signedIn.id, input.args ?? []);
           return toRun(await getRun(runId));
         } catch (error) {
           throw toGraphQLError(error);

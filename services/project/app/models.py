@@ -55,6 +55,7 @@ class ProjectInput(Model):
     files: list[ProjectFile] = Field(min_length=1, max_length=MAX_FILES)
     folders: list[Path] = Field(default=[], max_length=MAX_FILES)
     stdin: str = Field(default="", max_length=10_000)
+    args: str = Field(default="", max_length=1000)  # command-line arguments as typed
 
     @model_validator(mode="after")
     def check_files(self):
