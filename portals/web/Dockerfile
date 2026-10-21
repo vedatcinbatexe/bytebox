@@ -21,5 +21,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
+# Static files, e.g. the Material file icons made by scripts/copy-icons.mjs during the build
+COPY --from=build /app/public ./public
 EXPOSE 3000
 CMD ["node", "server.js"]

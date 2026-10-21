@@ -3,9 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/copy-icons.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/copy-icons.mjs",
     "build": "next build",
     "start": "next start",
+    "pretest": "node scripts/copy-icons.mjs",
     "test": "node --import tsx --test lib/*.test.ts"
   },
   "dependencies": {
@@ -14,6 +17,7 @@
     "@xterm/xterm": "^6.0.0",
     "fflate": "^0.8.3",
     "marked": "^16.4.1",
+    "material-icon-theme": "^5.39.0",
     "next": "^16.4.2",
     "prettier": "^3.9.10",
     "react": "^19.3.1",

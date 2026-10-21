@@ -15,6 +15,8 @@ import { ServerPanel } from './ServerPanel';
 import { CommentsDialog } from './CommentsDialog';
 import { EditorSettingsDialog } from './EditorSettingsDialog';
 import { TestsPanel } from './TestsPanel';
+import { FileIcon } from './FileIcon';
+import { CODE_FONT_FAMILY } from '@/lib/codeFont';
 import { TESTS_FILE, parseTests, serializeTests } from '@/lib/tests';
 import { SearchPanel } from './SearchPanel';
 import { ResizeHandle } from './ResizeHandle';
@@ -964,6 +966,8 @@ export function Playground({ slug, invite }: Props) {
   const onEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+    // Measure the code font again once it has loaded, so the cursor lines up with the text
+    void document.fonts.ready.then(() => monaco.editor.remeasureFonts());
     setEditorReady(true);
     applyMonacoTheme(monaco, theme);
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => runRef.current());
@@ -1363,7 +1367,8 @@ export function Playground({ slug, invite }: Props) {
                     tab === activePath ? 'border-t-accent bg-app text-fg' : 'border-t-transparent text-muted hover:text-fg'
                   }`}
                 >
-                  <button onClick={() => openFile(tab)} title={tab}>
+                  <button onClick={() => openFile(tab)} title={tab} className="flex items-center gap-1.5">
+                    <FileIcon path={tab} />
                     {tab.split('/').pop()}
                   </button>
                   <button
@@ -1414,6 +1419,17 @@ export function Playground({ slug, invite }: Props) {
                   minimap: { enabled: editorSettings.minimap },
                   lineNumbers: editorSettings.lineNumbers ? 'on' : 'off',
                   scrollBeyondLastLine: false,
+                  // Look: a font made for code, colored bracket pairs, smooth cursor and scrolling
+                  fontFamily: CODE_FONT_FAMILY,
+                  fontLigatures: true,
+                  lineHeight: Math.round(editorSettings.fontSize * 1.6),
+                  padding: { top: 10, bottom: 10 },
+                  bracketPairColorization: { enabled: true },
+                  guides: { bracketPairs: 'active', indentation: true },
+                  cursorBlinking: 'smooth',
+                  cursorSmoothCaretAnimation: 'on',
+                  smoothScrolling: true,
+                  renderLineHighlight: 'all',
                   readOnly: !user,
                   readOnlyMessage: { value: 'Log in to edit' },
                 }}
