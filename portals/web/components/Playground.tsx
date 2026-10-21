@@ -11,6 +11,7 @@ import { PreviewPanel } from './PreviewPanel';
 import { ProjectTags } from './ProjectTags';
 import { ForksDialog } from './ForksDialog';
 import { CollaboratorsPanel } from './CollaboratorsPanel';
+import { ServerPanel } from './ServerPanel';
 import { CommentsDialog } from './CommentsDialog';
 import { EditorSettingsDialog } from './EditorSettingsDialog';
 import { TestsPanel } from './TestsPanel';
@@ -27,6 +28,8 @@ import { DEFAULT_SIZES, clampSize, loadSizes, saveSizes, type PanelSizes } from 
 import { errorMarkers, type ErrorMarker } from '@/lib/errorLocations';
 import { splitArgs } from '@/lib/args';
 import { useCollab } from '@/lib/useCollab';
+import { useDevServer } from '@/lib/useDevServer';
+import { serverFramework } from '@/lib/devserver';
 import type { SharedState } from '@/lib/collab';
 import {
   DEFAULT_EDITOR_SETTINGS,
@@ -118,6 +121,7 @@ const STARTER_WORKSPACE: Workspace = {
 function workspaceFor(saved: SavedProject): Workspace {
   const paths = Object.keys(saved.project.files).sort();
   const first =
+    paths.find((path) => /^(server\.js|Program\.cs)$|Application\.java$/.test(path)) ?? // server projects
     paths.find((path) => /^(main\.(py|js|ts|cpp|go|rs)|Main\.java)$/.test(path)) ??
     paths.find((path) => path === 'index.html') ??
     paths.find((path) => runLanguage(path)) ??
@@ -133,7 +137,7 @@ function workspaceFor(saved: SavedProject): Workspace {
   };
 }
 
-type AsideTab = 'output' | 'tests' | 'preview' | 'people';
+type AsideTab = 'output' | 'tests' | 'preview' | 'people' | 'server';
 
 // The part of a workspace that is shared in a live session
 function toShared({ project, title, stdin, args }: Workspace): SharedState {
@@ -335,6 +339,17 @@ export function Playground({ slug, invite }: Props) {
     },
   });
   sendLocalChange.current = collab.localChange;
+
+  // ---------- Server projects (Express, Spring Boot, ASP.NET Core) ----------
+  const devServer = useDevServer();
+  const serverName = serverFramework(project.files);
+
+  function startServer() {
+    if (!canChange()) return;
+    showAside('server');
+    const files = Object.entries(currentInput().project.files).map(([path, content]) => ({ path, content }));
+    void devServer.start(files);
+  }
   // In a live session the collab service saves for everyone
   const live = collab.status === 'live';
   useEffect(() => {
@@ -693,6 +708,12 @@ export function Playground({ slug, invite }: Props) {
     if (slug && canEdit && !live) commands.push(action('save', 'Save', () => void saveChanges(), '⌘S'));
     if (slug && isOwner) commands.push(action('history', 'Version history', () => setHistoryOpen(true)));
     if (slug && canEdit) commands.push(action('collaborators', 'Collaborators', () => showAside('people')));
+    if (serverName) {
+      commands.push(action('server-start', `Start ${serverName} server (restart with the latest code)`, startServer));
+      if (devServer.status === 'starting' || devServer.status === 'running') {
+        commands.push(action('server-stop', 'Stop the server', () => devServer.stop()));
+      }
+    }
     if (slug) commands.push(action('fork', 'Fork (make your own copy)', () => void fork()));
     commands.push(
       action('shortcuts', 'Keyboard shortcuts', () => setShortcutsOpen(true), '?'),
@@ -1184,7 +1205,15 @@ export function Playground({ slug, invite }: Props) {
           >
             ? Commands
           </button>
-          {isHtmlOpen || isMarkdownOpen ? (
+          {serverName && !isHtmlOpen && !isMarkdownOpen ? (
+            <button
+              onClick={startServer}
+              title={`Start this ${serverName} project and open it in the 🖥 Server tab`}
+              className="rounded bg-accent px-3.5 py-1.5 text-sm font-semibold whitespace-nowrap text-accent-fg hover:bg-accent-hover"
+            >
+              {devServer.status === 'starting' || devServer.status === 'running' ? '↻ Restart server' : '▶ Start server'}
+            </button>
+          ) : isHtmlOpen || isMarkdownOpen ? (
             <button
               onClick={() => showAside('preview')}
               title={isHtmlOpen ? 'Show the live preview of this page' : 'Show this file rendered'}
@@ -1420,12 +1449,13 @@ export function Playground({ slug, invite }: Props) {
           className="flex min-h-80 shrink-0 flex-col bg-panel md:min-h-0 md:w-(--aside-w) md:max-w-[60vw]"
           style={{ '--aside-w': `${sizes.aside}px` } as React.CSSProperties}
         >
-          <div role="tablist" className="flex shrink-0 border-b border-line text-sm">
+          <div role="tablist" className="flex shrink-0 overflow-x-auto border-b border-line text-sm">
             {(
               [
                 'output',
                 'tests',
                 ...(hasPreview ? (['preview'] as const) : []),
+                ...(serverName ? (['server'] as const) : []),
                 ...(slug && canEdit ? (['people'] as const) : []),
               ] as AsideTab[]
             ).map((tab) => (
@@ -1434,7 +1464,7 @@ export function Playground({ slug, invite }: Props) {
                 role="tab"
                 aria-selected={asideTab === tab}
                 onClick={() => setAsideTab(tab)}
-                className={`border-b-2 px-4 py-2 ${
+                className={`shrink-0 border-b-2 px-3 py-2 whitespace-nowrap ${
                   asideTab === tab ? 'border-accent text-fg' : 'border-transparent text-muted hover:text-fg'
                 }`}
               >
@@ -1444,11 +1474,23 @@ export function Playground({ slug, invite }: Props) {
                     ? '🧪 Tests'
                     : tab === 'preview'
                       ? '👁 Preview'
-                      : `👥 Collaborators${collab.people.length > 1 ? ` · ${collab.people.length}` : ''}`}
+                      : tab === 'server'
+                        ? `🖥 Server${devServer.status === 'running' ? ' ●' : ''}`
+                        : `👥 Collaborators${collab.people.length > 1 ? ` · ${collab.people.length}` : ''}`}
               </button>
             ))}
           </div>
-          {asideTab === 'people' && slug && canEdit ? (
+          {asideTab === 'server' && serverName ? (
+            <ServerPanel
+              framework={serverName}
+              status={devServer.status}
+              runningFramework={devServer.framework}
+              previewUrl={devServer.previewUrl}
+              log={devServer.log}
+              onStart={startServer}
+              onStop={devServer.stop}
+            />
+          ) : asideTab === 'people' && slug && canEdit ? (
             <CollaboratorsPanel
               slug={slug}
               status={collab.status}

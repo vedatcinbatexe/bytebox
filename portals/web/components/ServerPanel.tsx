@@ -1,0 +1,105 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { AnsiText } from './OutputPanel';
+import type { ServerStatus } from '@/lib/useDevServer';
+
+interface Props {
+  framework: string; // what the project looks like, e.g. "Spring Boot"
+  status: ServerStatus;
+  runningFramework: string | null;
+  previewUrl: string | null;
+  log: string;
+  onStart: () => void;
+  onStop: () => void;
+}
+
+const BADGE: Record<ServerStatus, { text: string; className: string }> = {
+  idle: { text: 'Not started', className: 'bg-raised text-muted' },
+  starting: { text: 'Starting…', className: 'animate-pulse bg-info/15 text-info' },
+  running: { text: '● Running', className: 'bg-success/15 text-success' },
+  stopped: { text: 'Stopped', className: 'bg-raised text-muted' },
+};
+
+// The 🖥 Server tab: start/stop the project's server, try it in a preview and read its log
+export function ServerPanel({ framework, status, runningFramework, previewUrl, log, onStart, onStop }: Props) {
+  const [path, setPath] = useState('/');
+  const [reloads, setReloads] = useState(0);
+  const logRef = useRef<HTMLDivElement>(null);
+  const badge = BADGE[status];
+  const busy = status === 'starting' || status === 'running';
+  const pageUrl = previewUrl ? previewUrl.replace(/\/$/, '') + (path.startsWith('/') ? path : `/${path}`) : null;
+
+  // Keep the newest log lines in view
+  useEffect(() => {
+    logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
+  }, [log]);
+
+  return (
+    <section className="flex min-h-0 flex-1 flex-col">
+      <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2 text-xs">
+        <span className="font-semibold">{runningFramework ?? framework}</span>
+        <span className={`rounded px-2 py-0.5 ${badge.className}`}>{badge.text}</span>
+        <span className="ml-auto flex gap-2">
+          <button
+            onClick={onStart}
+            disabled={status === 'starting'}
+            className="rounded bg-accent px-2.5 py-1 font-semibold text-accent-fg hover:bg-accent-hover disabled:opacity-50"
+            title="Start the server with the latest code"
+          >
+            {busy ? '↻ Restart' : '▶ Start server'}
+          </button>
+          {busy && (
+            <button onClick={onStop} className="rounded border border-line-strong px-2.5 py-1 hover:bg-raised">
+              ■ Stop
+            </button>
+          )}
+        </span>
+      </div>
+
+      {pageUrl ? (
+        <>
+          <form
+            className="flex gap-1 border-b border-line px-2 py-1.5 text-xs"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setReloads((count) => count + 1);
+            }}
+          >
+            <span className="self-center font-mono text-subtle">GET</span>
+            <input
+              value={path}
+              onChange={(event) => setPath(event.target.value)}
+              aria-label="Path to open"
+              spellCheck={false}
+              className="min-w-0 flex-1 rounded border border-line bg-app px-2 py-0.5 font-mono outline-none focus:border-accent"
+            />
+            <button className="rounded px-2 text-muted hover:bg-raised hover:text-fg" title="Load this path">
+              ⟳
+            </button>
+            <a href={pageUrl} target="_blank" rel="noreferrer" className="self-center px-1 text-muted hover:text-fg" title="Open in a new tab">
+              ↗
+            </a>
+          </form>
+          <iframe
+            key={`${pageUrl}#${reloads}`}
+            title="Server preview"
+            src={pageUrl}
+            sandbox="allow-scripts allow-forms allow-same-origin allow-popups"
+            className="min-h-40 w-full flex-1 bg-white"
+          />
+        </>
+      ) : (
+        <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-subtle">
+          {status === 'starting'
+            ? 'Starting the server… the first start of a project can take a few seconds.'
+            : `Press ▶ Start server to run this ${framework} project. Your app should listen on port 8080 (PORT / server.port / ASPNETCORE_URLS are set for you).`}
+        </div>
+      )}
+
+      <div ref={logRef} className="max-h-48 min-h-20 shrink-0 overflow-auto border-t border-line bg-app px-3 py-2 font-mono text-xs">
+        {log ? <AnsiText text={log} className="text-fg" /> : <p className="text-subtle">The server log appears here.</p>}
+      </div>
+    </section>
+  );
+}
