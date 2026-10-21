@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { TreeNode } from '@/lib/project';
+import { FileIcon } from './FileIcon';
 
 // Drag data type for moving files and folders inside the tree
 export const DRAG_TYPE = 'application/x-bytebox-path';
@@ -80,7 +81,7 @@ export function FileTree(props: Props) {
             <span className="w-4 shrink-0 text-xs text-subtle">
               {isFolder ? (isOpen ? '▾' : '▸') : ''}
             </span>
-            <span className="shrink-0">{isFolder ? '📁' : '📄'}</span>
+            <FileIcon path={node.path} folder={isFolder} open={isOpen} />
             <span className="truncate">{node.name}</span>
             <span className="ml-auto hidden shrink-0 gap-1 group-hover:flex">
               <button
