@@ -810,7 +810,7 @@ export function Playground({ slug }: Props) {
       <div className="flex h-dvh flex-col items-center justify-center gap-4 p-8 text-center">
         <h1 className="text-2xl font-bold">Project not found</h1>
         <p className="text-muted">This link doesn&apos;t point to a Bytebox project.</p>
-        <Link href="/" className="rounded bg-accent px-4 py-2 text-sm font-semibold text-accent-fg">
+        <Link href="/playground" className="rounded bg-accent px-4 py-2 text-sm font-semibold text-accent-fg">
           Go to your workspace
         </Link>
       </div>
@@ -828,7 +828,7 @@ export function Playground({ slug }: Props) {
   return (
     <div className="flex h-dvh flex-col">
       <header className="flex flex-wrap items-center gap-2 border-b border-line bg-panel px-3 py-2">
-        <Link href="/" className="mr-1 text-lg font-bold whitespace-nowrap" title="Your local workspace">
+        <Link href="/" className="mr-1 text-lg font-bold whitespace-nowrap" title="Bytebox home">
           📦 Bytebox
         </Link>
         <Link href="/explore" className="hidden text-sm text-muted hover:text-fg sm:inline" title="Public projects">
