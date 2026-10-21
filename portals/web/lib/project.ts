@@ -28,6 +28,10 @@ const RUNNABLE: Record<string, string> = {
 };
 const EDITOR_LANGUAGES: Record<string, string> = {
   ...RUNNABLE,
+  '.cs': 'csharp', // server projects: ASP.NET Core, Spring Boot
+  '.csproj': 'xml',
+  '.xml': 'xml',
+  '.properties': 'ini',
   '.h': 'cpp',
   '.hpp': 'cpp',
   '.json': 'json',

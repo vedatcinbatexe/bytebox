@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createProject } from '@/lib/projects';
 import { WORKSPACE_TEMPLATES } from '@/lib/templates';
+import { SERVER_TEMPLATES } from '@/lib/serverTemplates';
+
+const TEMPLATES = [...WORKSPACE_TEMPLATES, ...SERVER_TEMPLATES];
 import { projectFromZip, type ImportedZip } from '@/lib/zip';
 
 interface Props {
@@ -13,7 +16,7 @@ interface Props {
 // Asks for a name and a template, then creates the workspace and opens it
 export function CreateWorkspaceModal({ onClose }: Props) {
   const router = useRouter();
-  const [template, setTemplate] = useState(WORKSPACE_TEMPLATES[0]);
+  const [template, setTemplate] = useState(TEMPLATES[0]);
   const [name, setName] = useState('');
   const [nameEdited, setNameEdited] = useState(false);
   const [imported, setImported] = useState<ImportedZip | null>(null);
@@ -87,7 +90,7 @@ export function CreateWorkspaceModal({ onClose }: Props) {
         <p className="mb-4 text-sm text-muted">Pick a starting point and give it a name.</p>
 
         <div role="radiogroup" aria-label="Template" className="mb-5 grid gap-2 sm:grid-cols-2">
-          {WORKSPACE_TEMPLATES.map((item) => {
+          {TEMPLATES.map((item) => {
             const selected = !imported && item.id === template.id;
             return (
               <button
