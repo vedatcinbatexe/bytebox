@@ -21,6 +21,8 @@ from .models import (
     ProjectStats,
     Comment,
     CommentInput,
+    InviteState,
+    JoinInput,
     Version,
     VersionSummary,
 )
@@ -57,8 +59,9 @@ def health():
 
 @app.get("/projects", response_model=list[ProjectSummary])
 def list_my_projects(user_id: UserId = None):
-    owner = require_user(user_id)
-    documents = db.projects.find({"owner_id": owner}).sort("updated_at", -1).limit(100)
+    user = require_user(user_id)
+    mine_or_shared = {"$or": [{"owner_id": user}, {"collaborators.user_id": user}]}
+    documents = db.projects.find(mine_or_shared).sort("updated_at", -1).limit(100)
     return [summary(document) for document in documents]
 
 
@@ -127,7 +130,7 @@ def create_project(body: CreateProjectInput, user_id: UserId = None, user_login:
         document["_id"] = new_slug()
         try:
             db.projects.insert_one(document)
-            return to_project(document)
+            return to_project(document, owner)
         except DuplicateKeyError:
             continue
     raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Could not create a unique link")
@@ -138,7 +141,7 @@ def get_project(slug: Slug, user_id: UserId = None):
     document = find_project(slug)
     if not can_view(document, user_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")  # don't reveal private projects
-    project = to_project(document)
+    project = to_project(document, user_id)
     if user_id:
         project.starred_by_me = db.stars.count_documents({"project_id": slug, "user_id": user_id}) > 0
     project.fork_count = db.projects.count_documents({"forked_from": slug})
@@ -193,11 +196,11 @@ def star_state(slug, user_id):
 @app.put("/projects/{slug}", response_model=Project)
 def update_project(slug: Slug, body: ProjectInput, user_id: UserId = None, autosave: bool = False):
     document = find_project(slug)
-    check_owner(document, require_user(user_id))
+    check_editor(document, require_user(user_id))
     if not (autosave and kept_version_recently(slug)):
         keep_version(document)
     db.projects.update_one({"_id": slug}, {"$set": {**body.model_dump(), "updated_at": datetime.now(UTC)}})
-    return to_project(find_project(slug))
+    return to_project(find_project(slug), user_id)
 
 
 @app.patch("/projects/{slug}", response_model=Project)
@@ -209,7 +212,7 @@ def patch_project(slug: Slug, body: ProjectPatch, user_id: UserId = None):
         keep_version(document)  # visibility and tags aren't part of a version, the title is
     if changes:
         db.projects.update_one({"_id": slug}, {"$set": {**changes, "updated_at": datetime.now(UTC)}})
-    return to_project(find_project(slug))
+    return to_project(find_project(slug), user_id)
 
 
 @app.delete("/projects/{slug}", status_code=status.HTTP_204_NO_CONTENT)
@@ -219,6 +222,53 @@ def delete_project(slug: Slug, user_id: UserId = None):
     db.versions.delete_many({"project_id": slug})
     db.stars.delete_many({"project_id": slug})
     db.comments.delete_many({"project_id": slug})
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+MAX_COLLABORATORS = 20
+
+
+@app.post("/projects/{slug}/invite", response_model=InviteState)
+def new_invite(slug: Slug, user_id: UserId = None):
+    """A new invite link token (the old link stops working)."""
+    document = find_project(slug)
+    check_owner(document, require_user(user_id))
+    token = secrets.token_urlsafe(16)
+    db.projects.update_one({"_id": slug}, {"$set": {"invite_token": token}})
+    return InviteState(invite_token=token)
+
+
+@app.delete("/projects/{slug}/invite", response_model=InviteState)
+def stop_invites(slug: Slug, user_id: UserId = None):
+    check_owner(find_project(slug), require_user(user_id))
+    db.projects.update_one({"_id": slug}, {"$unset": {"invite_token": ""}})
+    return InviteState(invite_token=None)
+
+
+@app.post("/projects/{slug}/join", response_model=Project)
+def join(slug: Slug, body: JoinInput, user_id: UserId = None, user_login: UserLogin = None):
+    """Become a collaborator with the invite link's token."""
+    user = require_user(user_id)
+    document = find_project(slug)
+    token = document.get("invite_token")
+    if not token or not secrets.compare_digest(token, body.token):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "This invite link is not valid anymore")
+    if not can_edit(document, user):
+        if len(document.get("collaborators", [])) >= MAX_COLLABORATORS:
+            raise HTTPException(status.HTTP_409_CONFLICT, f"A project can have at most {MAX_COLLABORATORS} collaborators")
+        collaborator = {"user_id": user, "login": user_login, "joined_at": datetime.now(UTC)}
+        db.projects.update_one({"_id": slug}, {"$push": {"collaborators": collaborator}})
+    return to_project(find_project(slug), user)
+
+
+@app.delete("/projects/{slug}/collaborators/{collaborator_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_collaborator(slug: Slug, collaborator_id: str, user_id: UserId = None):
+    """The owner removes someone, or a collaborator leaves."""
+    user = require_user(user_id)
+    document = find_project(slug)
+    if user != collaborator_id:
+        check_owner(document, user)
+    db.projects.update_one({"_id": slug}, {"$pull": {"collaborators": {"user_id": collaborator_id}}})
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -310,7 +360,7 @@ def restore_version(slug: Slug, version_id: str, user_id: UserId = None):
     keep_version(document)  # restoring is a change too, so the current version stays in history
     content = {key: version.get(key, "") for key in ("title", "files", "folders", "stdin", "args")}
     db.projects.update_one({"_id": slug}, {"$set": {**content, "updated_at": datetime.now(UTC)}})
-    return to_project(find_project(slug))
+    return to_project(find_project(slug), user_id)
 
 
 def keep_version(document):
@@ -359,7 +409,21 @@ def require_user(user_id):
 
 
 def can_view(document, user_id):
-    return document.get("visibility", "unlisted") != "private" or document.get("owner_id") == user_id
+    return document.get("visibility", "unlisted") != "private" or can_edit(document, user_id)
+
+
+def can_edit(document, user_id):
+    """The owner and the collaborators they invited can change the files."""
+    if not user_id:
+        return False
+    return document.get("owner_id") == user_id or any(
+        collaborator["user_id"] == user_id for collaborator in document.get("collaborators", [])
+    )
+
+
+def check_editor(document, user_id):
+    if not can_edit(document, user_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the owner and collaborators can change this project")
 
 
 def find_project(slug):
@@ -374,8 +438,14 @@ def check_owner(document, user_id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the owner can change this project")
 
 
-def to_project(document):
-    return Project(slug=document["_id"], **document)
+def to_project(document, user_id=None):
+    project = Project(slug=document["_id"], **document)
+    project.can_edit = can_edit(document, user_id)
+    if not project.can_edit:
+        project.collaborators = []  # who works on a project is only for the people working on it
+    if document.get("owner_id") != user_id:
+        project.invite_token = None
+    return project
 
 
 def new_slug():

@@ -1,6 +1,12 @@
 import { Playground } from '@/components/Playground';
 
-export default async function SharedProjectPage({ params }: { params: Promise<{ slug: string }> }) {
+interface Params {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ invite?: string }>;
+}
+
+export default async function SharedProjectPage({ params, searchParams }: Params) {
   const { slug } = await params;
-  return <Playground slug={slug} />;
+  const { invite } = await searchParams;
+  return <Playground slug={slug} invite={invite} />;
 }

@@ -10,6 +10,7 @@ projects = database["projects"]
 projects.create_index("owner_id")
 projects.create_index("tags")
 projects.create_index("forked_from")
+projects.create_index("collaborators.user_id")
 
 # One document per (project, user) star
 stars = database["stars"]

@@ -157,6 +157,20 @@ services:
       sandbox-workspace:
         condition: service_completed_successfully
 
+  # Live collaboration: shared Yjs documents over WebSocket, saved to the project service
+  collab:
+    restart: unless-stopped
+    build: ./services/collab
+    environment:
+      PORT: 4200
+      PROJECT_URL: http://project:8000
+      ALLOWED_ORIGINS: http://localhost:3000
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-please-set-JWT_SECRET-in-env}
+    ports:
+      - '4200:4200'
+    depends_on:
+      - project
+
   # Builds the workspace image used by terminal sessions, then exits
   sandbox-workspace:
     build: ./services/terminal/images/workspace
@@ -194,6 +208,7 @@ services:
         # Used by the browser, so it must be reachable from the user's machine
         NEXT_PUBLIC_GATEWAY_URL: http://localhost:4000/graphql
         NEXT_PUBLIC_TERMINAL_URL: ws://localhost:4100
+        NEXT_PUBLIC_COLLAB_URL: ws://localhost:4200
         NEXT_PUBLIC_IDENTITY_URL: http://localhost:5001
     ports:
       - '3000:3000'

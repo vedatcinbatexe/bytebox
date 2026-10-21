@@ -92,6 +92,12 @@ class CreateProjectInput(ProjectInput):
     visibility: Visibility = "unlisted"
 
 
+class Collaborator(Model):
+    user_id: str
+    login: str | None = None
+    joined_at: datetime
+
+
 class Project(ProjectInput):
     slug: str
     forked_from: str | None = None
@@ -103,6 +109,10 @@ class Project(ProjectInput):
     tags: list[str] = []
     fork_count: int = 0
     comment_count: int = 0
+    # Live collaboration: people the owner invited can edit and save too
+    can_edit: bool = False
+    collaborators: list[Collaborator] = []  # only shown to people who can edit
+    invite_token: str | None = None  # only shown to the owner
     forked_from_title: str | None = None  # None when the original is gone or private
     created_at: datetime
     updated_at: datetime
@@ -117,6 +127,14 @@ class ProjectSummary(Model):
     owner_login: str | None = None
     star_count: int = 0
     tags: list[str] = []
+
+
+class JoinInput(Model):
+    token: str = Field(min_length=1, max_length=100)
+
+
+class InviteState(Model):
+    invite_token: str | None
 
 
 class CommentInput(Model):
