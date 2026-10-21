@@ -7,6 +7,7 @@ import type { WebSocket } from 'ws';
 import { checkFiles, packFiles } from './files.js';
 import { PORT, detectFramework, type ProjectFile } from './frameworks.js';
 import { SlidingWindowLimiter } from './limits.js';
+import { sendApiRequest, type ApiRequest, type ApiResponse } from './apiRequest.js';
 
 export const docker = new Docker();
 export const LABEL = 'bytebox-devserver';
@@ -18,10 +19,14 @@ const MAX_LOG_BYTES = 2 * 1024 * 1024; // per session; a server that floods its 
 const USER = '65534:65534'; // nobody
 
 // Messages between the browser and this service (JSON over the WebSocket)
-export type ClientMessage = { type: 'start'; files: ProjectFile[] } | { type: 'stop' };
+export type ClientMessage =
+  | { type: 'start'; files: ProjectFile[] }
+  | { type: 'stop' }
+  | ({ type: 'request' } & ApiRequest); // from the API tester
 export type ServerMessage =
   | { type: 'status'; status: 'starting' | 'running' | 'stopped'; framework?: string; previewUrl?: string }
   | { type: 'log'; data: string }
+  | ({ type: 'response' } & ApiResponse)
   | { type: 'error'; message: string };
 
 // Where the preview proxy sends requests: preview id → container address
@@ -45,6 +50,7 @@ class ServerSession {
   private container: Docker.Container | null = null;
   private network: Docker.Network | null = null;
   private previewId: string | null = null;
+  private host: string | null = null; // the running server's address
   private maxTimer: NodeJS.Timeout | null = null;
   private logBytes = 0;
   private queue: Promise<void> = Promise.resolve(); // one message at a time, in order
@@ -54,8 +60,16 @@ class ServerSession {
     private userId: string,
   ) {
     ws.on('message', (raw) => {
+      let message: ClientMessage;
+      try {
+        message = JSON.parse(raw.toString()) as ClientMessage;
+      } catch {
+        return this.send({ type: 'error', message: 'Invalid message' });
+      }
+      // API tester requests don't wait in the queue: a slow request must not hold up "stop"
+      if (message.type === 'request') return void this.request(message);
       this.queue = this.queue
-        .then(() => this.handle(raw.toString()))
+        .then(() => this.handle(message))
         .catch((error) => {
           console.error(error);
           this.send({ type: 'error', message: 'Something went wrong with the server.' });
@@ -64,13 +78,7 @@ class ServerSession {
     });
   }
 
-  private async handle(raw: string) {
-    let message: ClientMessage;
-    try {
-      message = JSON.parse(raw) as ClientMessage;
-    } catch {
-      return this.send({ type: 'error', message: 'Invalid message' });
-    }
+  private async handle(message: ClientMessage) {
     if (message.type === 'stop') return this.stop();
     if (message.type === 'start') {
       await this.stop(); // restarting = stop, then start with the latest files
@@ -153,6 +161,7 @@ class ServerSession {
     if (!host) throw new Error('The server has no address');
     if (await this.waitUntilListening(host)) {
       this.previewId = id;
+      this.host = host;
       previews.set(id, host);
       this.send({ type: 'status', status: 'running', framework: framework.name, previewUrl: `${PUBLIC_URL}/preview/${id}/` });
     }
@@ -200,6 +209,13 @@ class ServerSession {
     return false;
   }
 
+  private async request(message: ApiRequest) {
+    const response = this.host
+      ? await sendApiRequest(this.host, PORT, message)
+      : { id: message.id, status: 0, statusText: '', headers: {}, body: '', truncated: false, timeMs: 0, sizeBytes: 0, error: 'Start the server first' };
+    this.send({ type: 'response', ...response });
+  }
+
   private log(data: string) {
     this.logBytes += data.length;
     if (this.logBytes > MAX_LOG_BYTES) {
@@ -221,6 +237,7 @@ class ServerSession {
     this.container = null;
     this.network = null;
     this.previewId = null;
+    this.host = null;
     this.logBytes = 0;
     if (this.maxTimer) clearTimeout(this.maxTimer);
     if (previewId) previews.delete(previewId);

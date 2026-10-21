@@ -1511,6 +1511,8 @@ export function Playground({ slug, invite }: Props) {
               log={devServer.log}
               onStart={startServer}
               onStop={devServer.stop}
+              files={project.files}
+              onSend={devServer.send}
             />
           ) : asideTab === 'people' && slug && canEdit ? (
             <CollaboratorsPanel
