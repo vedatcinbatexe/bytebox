@@ -21,6 +21,8 @@ export interface Project extends ProjectInput {
   starCount: number;
   starredByMe: boolean;
   tags: string[];
+  forkCount: number;
+  forkedFromTitle: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -98,6 +100,10 @@ export async function explore(sort: 'newest' | 'stars' = 'newest', tag?: string)
 export async function projectStats(): Promise<{ projects: number; publicProjects: number; stars: number }> {
   const stats = await call<{ projects: number; publicProjects: number; stars: number }>('GET', '/stats');
   return stats ?? { projects: 0, publicProjects: 0, stars: 0 };
+}
+
+export async function listForks(slug: string, userId?: string): Promise<ProjectSummary[]> {
+  return (await call<ProjectSummary[]>('GET', `/projects/${encodeURIComponent(slug)}/forks`, { userId })) ?? [];
 }
 
 export async function popularTags(): Promise<{ tag: string; count: number }[]> {

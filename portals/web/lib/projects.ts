@@ -21,6 +21,8 @@ export interface SavedProject {
   starCount: number;
   starredByMe: boolean;
   tags: string[];
+  forkCount: number;
+  forkedFromTitle: string | null;
 }
 
 export interface ProjectSummary {
@@ -47,6 +49,8 @@ interface ApiProject {
   starCount: number;
   starredByMe: boolean;
   tags: string[];
+  forkCount: number;
+  forkedFromTitle: string | null;
 }
 
 export interface ProjectInput {
@@ -56,7 +60,7 @@ export interface ProjectInput {
 }
 
 const PROJECT_FIELDS =
-  'slug title files { path content } folders stdin forkedFrom ownedByMe visibility ownerLogin starCount starredByMe tags';
+  'slug title files { path content } folders stdin forkedFrom ownedByMe visibility ownerLogin starCount starredByMe tags forkCount forkedFromTitle';
 const SUMMARY_FIELDS = 'slug title fileCount updatedAt visibility ownerLogin starCount tags';
 
 function fromApi(project: ApiProject): SavedProject {
@@ -75,6 +79,8 @@ function fromApi(project: ApiProject): SavedProject {
     starCount: project.starCount,
     starredByMe: project.starredByMe,
     tags: project.tags,
+    forkCount: project.forkCount,
+    forkedFromTitle: project.forkedFromTitle,
   };
 }
 
@@ -188,6 +194,14 @@ export async function fetchExplore(sort: 'NEWEST' | 'STARS' = 'NEWEST', tag?: st
     { sort, tag },
   );
   return data.explore;
+}
+
+export async function fetchForks(slug: string): Promise<ProjectSummary[]> {
+  const data = await request<{ project: { forks: ProjectSummary[] } | null }>(
+    `query Forks($slug: String!) { project(slug: $slug) { forks { ${SUMMARY_FIELDS} } } }`,
+    { slug },
+  );
+  return data.project?.forks ?? [];
 }
 
 export async function fetchPopularTags(): Promise<{ tag: string; count: number }[]> {

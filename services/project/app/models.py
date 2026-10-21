@@ -100,6 +100,8 @@ class Project(ProjectInput):
     star_count: int = 0
     starred_by_me: bool = False
     tags: list[str] = []
+    fork_count: int = 0
+    forked_from_title: str | None = None  # None when the original is gone or private
     created_at: datetime
     updated_at: datetime
 

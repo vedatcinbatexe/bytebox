@@ -139,7 +139,23 @@ def get_project(slug: Slug, user_id: UserId = None):
     project = to_project(document)
     if user_id:
         project.starred_by_me = db.stars.count_documents({"project_id": slug, "user_id": user_id}) > 0
+    project.fork_count = db.projects.count_documents({"forked_from": slug})
+    if project.forked_from:
+        original = db.projects.find_one({"_id": project.forked_from}, {"title": 1, "owner_id": 1, "visibility": 1})
+        if original and can_view(original, user_id):
+            project.forked_from_title = original["title"]
+        else:
+            project.forked_from = None  # don't link to a deleted or private project
     return project
+
+
+@app.get("/projects/{slug}/forks", response_model=list[ProjectSummary])
+def list_forks(slug: Slug, user_id: UserId = None):
+    """Public forks of a project, newest first."""
+    if not can_view(find_project(slug), user_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
+    documents = db.projects.find({"forked_from": slug, "visibility": "public"}).sort("updated_at", -1).limit(50)
+    return [summary(document) for document in documents]
 
 
 @app.put("/projects/{slug}/star", response_model=StarState)
