@@ -128,7 +128,7 @@ export function OutputPanel({ run, error, filePaths, onOpenLocation, stdin = '' 
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto p-4 font-mono text-sm">
+      <div className="code-text min-h-0 flex-1 overflow-auto p-4 font-mono">
         {error && (
           <p className="mb-3 rounded border border-danger/30 bg-danger/10 px-3 py-2 text-danger">
             {error}

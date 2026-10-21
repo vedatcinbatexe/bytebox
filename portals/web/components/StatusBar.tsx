@@ -9,6 +9,8 @@ interface Props {
   saveState: 'saved' | 'unsaved' | 'local' | 'guest' | 'other' | 'live';
   onShowShortcuts: () => void;
   onShowSettings: () => void;
+  zoomPercent: number;
+  onZoom: (direction: 1 | -1 | 0) => void; // 0 = back to 100%
   hidden: { explorer: boolean; aside: boolean };
   onTogglePanel: (panel: 'explorer' | 'aside') => void;
 }
@@ -49,6 +51,8 @@ export function StatusBar({
   saveState,
   onShowShortcuts,
   onShowSettings,
+  zoomPercent,
+  onZoom,
   hidden,
   onTogglePanel,
 }: Props) {
@@ -75,6 +79,17 @@ export function StatusBar({
         </span>
       )}
       <span className={`ml-auto ${saveState === 'unsaved' ? 'text-warning' : ''}`}>{SAVE_LABELS[saveState]}</span>
+      <span className="flex items-center rounded border border-line" aria-label="Zoom">
+        <button onClick={() => onZoom(-1)} className="px-1.5 hover:bg-raised hover:text-fg" title="Zoom out (⌘/Ctrl + −)">
+          −
+        </button>
+        <button onClick={() => onZoom(0)} className="w-11 text-center tabular-nums hover:bg-raised hover:text-fg" title="Back to 100% (⌘/Ctrl + 0)">
+          {zoomPercent}%
+        </button>
+        <button onClick={() => onZoom(1)} className="px-1.5 hover:bg-raised hover:text-fg" title="Zoom in (⌘/Ctrl + =)">
+          +
+        </button>
+      </span>
       <button onClick={onShowSettings} className="rounded px-1.5 hover:bg-raised hover:text-fg" title="Font size, tab size, word wrap…">
         ⚙ Editor
       </button>

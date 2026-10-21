@@ -17,7 +17,18 @@ export const DEFAULT_EDITOR_SETTINGS: EditorSettings = {
   lineNumbers: true,
 };
 
-export const FONT_SIZES = [12, 13, 14, 16, 18, 20, 24];
+// Also the zoom steps (− / + in the status bar); 14 px is 100%
+export const FONT_SIZES = [10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24, 28, 32];
+
+// The next bigger or smaller size (a size between two steps goes to the nearest step that way)
+export function zoomStep(fontSize: number, direction: 1 | -1): number {
+  if (direction > 0) return FONT_SIZES.find((size) => size > fontSize) ?? FONT_SIZES[FONT_SIZES.length - 1];
+  return [...FONT_SIZES].reverse().find((size) => size < fontSize) ?? FONT_SIZES[0];
+}
+
+export function zoomPercent(fontSize: number): number {
+  return Math.round((fontSize / DEFAULT_EDITOR_SETTINGS.fontSize) * 100);
+}
 
 const STORAGE_KEY = 'bytebox:editor';
 

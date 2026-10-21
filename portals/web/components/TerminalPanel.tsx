@@ -32,13 +32,17 @@ interface Props {
   onTerminalChanges: (changes: TerminalChanges) => void;
   onClose: () => void;
   height?: number; // pixels, on desktop
+  fontSize?: number; // follows the zoom
 }
 
 function toList(files: Record<string, string>): ProjectFile[] {
   return Object.entries(files).map(([path, content]) => ({ path, content }));
 }
 
-export function TerminalPanel({ project, onTerminalChanges, onClose, height }: Props) {
+export function TerminalPanel({ project, onTerminalChanges, onClose, height, fontSize = 13 }: Props) {
+  // Zooming changes the terminal's font; it's then fitted to the panel again
+  const zoomRef = useRef<(size: number) => void>(() => {});
+  useEffect(() => zoomRef.current(fontSize), [fontSize]);
   const containerRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const projectRef = useRef(project);
@@ -86,7 +90,7 @@ export function TerminalPanel({ project, onTerminalChanges, onClose, height }: P
     Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')]).then(([xterm, fitAddon]) => {
       if (cancelled || !containerRef.current) return;
       terminal = new xterm.Terminal({
-        fontSize: 13,
+        fontSize,
         cursorBlink: true,
         theme: terminalTheme(),
       });
@@ -95,6 +99,10 @@ export function TerminalPanel({ project, onTerminalChanges, onClose, height }: P
       terminal.loadAddon(fit);
       terminal.open(containerRef.current);
       fit.fit();
+      zoomRef.current = (size) => {
+        terminal!.options.fontSize = size;
+        fit.fit();
+      };
       terminal.onData((data) => send({ type: 'input', data }));
 
       observer = new ResizeObserver(() => {
