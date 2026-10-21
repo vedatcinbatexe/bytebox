@@ -19,6 +19,8 @@ from .models import (
     ProjectPatch,
     TagCount,
     ProjectStats,
+    Comment,
+    CommentInput,
     Version,
     VersionSummary,
 )
@@ -140,6 +142,7 @@ def get_project(slug: Slug, user_id: UserId = None):
     if user_id:
         project.starred_by_me = db.stars.count_documents({"project_id": slug, "user_id": user_id}) > 0
     project.fork_count = db.projects.count_documents({"forked_from": slug})
+    project.comment_count = db.comments.count_documents({"project_id": slug})
     if project.forked_from:
         original = db.projects.find_one({"_id": project.forked_from}, {"title": 1, "owner_id": 1, "visibility": 1})
         if original and can_view(original, user_id):
@@ -215,7 +218,72 @@ def delete_project(slug: Slug, user_id: UserId = None):
     db.projects.delete_one({"_id": slug})
     db.versions.delete_many({"project_id": slug})
     db.stars.delete_many({"project_id": slug})
+    db.comments.delete_many({"project_id": slug})
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+MAX_COMMENTS = 500  # per project, to keep pages small
+
+
+@app.get("/projects/{slug}/comments", response_model=list[Comment])
+def list_comments(slug: Slug, user_id: UserId = None):
+    document = viewable_project(slug, user_id)
+    comments = db.comments.find({"project_id": slug}).sort("created_at", 1).limit(MAX_COMMENTS)
+    return [to_comment(comment, document, user_id) for comment in comments]
+
+
+@app.post("/projects/{slug}/comments", status_code=status.HTTP_201_CREATED, response_model=Comment)
+def add_comment(slug: Slug, body: CommentInput, user_id: UserId = None, user_login: UserLogin = None):
+    user = require_user(user_id)
+    document = viewable_project(slug, user)
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Write something first")
+    if db.comments.count_documents({"project_id": slug}) >= MAX_COMMENTS:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This project has too many comments")
+    comment = {
+        "project_id": slug,
+        "user_id": user,
+        "author_login": user_login,
+        "text": text,
+        "created_at": datetime.now(UTC),
+    }
+    comment["_id"] = db.comments.insert_one(comment).inserted_id
+    return to_comment(comment, document, user)
+
+
+@app.delete("/projects/{slug}/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_comment(slug: Slug, comment_id: str, user_id: UserId = None):
+    user = require_user(user_id)
+    document = viewable_project(slug, user)
+    try:
+        comment = db.comments.find_one({"_id": ObjectId(comment_id), "project_id": slug})
+    except InvalidId:
+        comment = None
+    if comment is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Comment not found")
+    if not to_comment(comment, document, user).can_delete:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the author or the project owner can delete a comment")
+    db.comments.delete_one({"_id": comment["_id"]})
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def viewable_project(slug, user_id):
+    document = find_project(slug)
+    if not can_view(document, user_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
+    return document
+
+
+def to_comment(comment, project, user_id):
+    can_delete = user_id is not None and user_id in (comment["user_id"], project.get("owner_id"))
+    return Comment(
+        id=str(comment["_id"]),
+        text=comment["text"],
+        author_login=comment.get("author_login"),
+        created_at=comment["created_at"],
+        can_delete=can_delete,
+    )
 
 
 @app.get("/projects/{slug}/versions", response_model=list[VersionSummary])

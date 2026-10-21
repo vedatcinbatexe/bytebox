@@ -23,6 +23,9 @@ import {
   setTags,
   popularTags,
   listForks,
+  listComments,
+  addComment,
+  deleteComment,
   setStar,
   renameProject,
   restoreVersion,
@@ -106,6 +109,10 @@ const typeDefs = /* GraphQL */ `
     renameProject(slug: String!, title: String!): Project!
     "public (listed on Explore), unlisted (anyone with the link) or private (only you)"
     setProjectVisibility(slug: String!, visibility: Visibility!): Project!
+    "Comment on a project you can see (1-1000 characters)"
+    addComment(slug: String!, text: String!): Comment!
+    "Delete your comment, or any comment on your project"
+    deleteComment(slug: String!, id: ID!): Boolean!
     "Up to 5 tags like game or data-science on a project you own (replaces the old ones)"
     setProjectTags(slug: String!, tags: [String!]!): Project!
     "Star (or unstar) a project you can see"
@@ -188,6 +195,15 @@ const typeDefs = /* GraphQL */ `
     runs: Int!
   }
 
+  type Comment {
+    id: ID!
+    text: String!
+    authorLogin: String
+    createdAt: String!
+    "True for the author and the project owner"
+    canDelete: Boolean!
+  }
+
   type TagCount {
     tag: String!
     count: Int!
@@ -254,6 +270,9 @@ const typeDefs = /* GraphQL */ `
     forkedFromTitle: String
     "Public forks of this project, newest first"
     forks: [ProjectSummary!]!
+    commentCount: Int!
+    "Oldest first"
+    comments: [Comment!]!
     title: String!
     files: [ProjectFile!]!
     folders: [String!]!
@@ -388,6 +407,8 @@ export const schema = createSchema<Context>({
       visibility: (project: Project) => (project.visibility ?? 'unlisted').toUpperCase(),
       forkCount: (project: Project) => project.forkCount ?? 0,
       forks: (project: Project, _: unknown, { user }: Context) => listForks(project.slug, user?.id),
+      commentCount: (project: Project) => project.commentCount ?? 0,
+      comments: (project: Project, _: unknown, { user }: Context) => listComments(project.slug, user?.id),
     },
 
     ProjectSummary: {
@@ -416,6 +437,23 @@ export const schema = createSchema<Context>({
         const signedIn = requireUser(user);
         await limitSaves(signedIn.id);
         return setVisibility(slug, visibility.toLowerCase() as Visibility, signedIn.id);
+      },
+
+      addComment: async (_, { slug, text }: { slug: string; text: string }, { user }) => {
+        const signedIn = requireUser(user);
+        await limitSaves(signedIn.id);
+        if (!text.trim()) {
+          throw new GraphQLError('Write something first', { extensions: { code: 'BAD_USER_INPUT' } });
+        }
+        if (text.length > 1000) {
+          throw new GraphQLError('Comments can be at most 1000 characters', { extensions: { code: 'BAD_USER_INPUT' } });
+        }
+        return addComment(slug, text, signedIn.id, signedIn.login);
+      },
+
+      deleteComment: async (_, { slug, id }: { slug: string; id: string }, { user }) => {
+        await deleteComment(slug, id, requireUser(user).id);
+        return true;
       },
 
       setProjectTags: async (_, { slug, tags }: { slug: string; tags: string[] }, { user }) => {

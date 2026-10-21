@@ -296,3 +296,33 @@ def test_a_fork_does_not_link_to_a_private_or_deleted_original(client):
     assert client.get(f"/projects/{original}/forks", headers=BOB).status_code == 404
     client.delete(f"/projects/{original}", headers=ALICE)
     assert client.get(f"/projects/{fork}", headers=BOB).json()["forkedFromTitle"] is None
+
+
+def test_comments_can_be_added_listed_and_deleted(client):
+    slug = create(client)["slug"]
+    added = client.post(f"/projects/{slug}/comments", json={"text": "  Nice!  "}, headers={**BOB, "X-User-Login": "bob"})
+    assert added.status_code == 201, added.text
+    comment = added.json()
+    assert comment["text"] == "Nice!"
+    assert comment["authorLogin"] == "bob"
+
+    listed = client.get(f"/projects/{slug}/comments", headers=ALICE).json()
+    assert [c["text"] for c in listed] == ["Nice!"]
+    assert listed[0]["canDelete"] is True  # the project owner
+    assert client.get(f"/projects/{slug}/comments").json()[0]["canDelete"] is False  # signed out
+    assert client.get(f"/projects/{slug}").json()["commentCount"] == 1
+
+    other = {"X-User-Id": "carol-id"}
+    assert client.delete(f"/projects/{slug}/comments/{comment['id']}", headers=other).status_code == 403
+    assert client.delete(f"/projects/{slug}/comments/{comment['id']}", headers=BOB).status_code == 204
+    assert client.get(f"/projects/{slug}/comments").json() == []
+
+
+def test_comments_need_a_user_text_and_a_visible_project(client):
+    slug = create(client)["slug"]
+    assert client.post(f"/projects/{slug}/comments", json={"text": "hi"}).status_code == 401
+    assert client.post(f"/projects/{slug}/comments", json={"text": "   "}, headers=BOB).status_code == 422
+    assert client.post(f"/projects/{slug}/comments", json={"text": "x" * 1001}, headers=BOB).status_code == 422
+    client.patch(f"/projects/{slug}", json={"visibility": "private"}, headers=ALICE)
+    assert client.get(f"/projects/{slug}/comments", headers=BOB).status_code == 404
+    assert client.post(f"/projects/{slug}/comments", json={"text": "hi"}, headers=BOB).status_code == 404
