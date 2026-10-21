@@ -73,7 +73,10 @@ import {
   type Visibility,
 } from '@/lib/projects';
 
-const STORAGE_KEY = 'bytebox:workspace';
+// v2: everyone starts with the welcome project. Workspaces saved before it stay under the old key
+// and can be brought back from the command palette.
+const STORAGE_KEY = 'bytebox:workspace:v2';
+const OLD_STORAGE_KEY = 'bytebox:workspace';
 const AUTOSAVE_KEY = 'bytebox:autosave';
 const HIDDEN_PANELS_KEY = 'bytebox:hidden-panels';
 
@@ -95,11 +98,11 @@ interface Workspace {
 }
 
 const STARTER_WORKSPACE: Workspace = {
-  title: 'Untitled project',
+  title: 'Welcome to Bytebox',
   project: STARTER_PROJECT,
-  openTabs: [STARTER_FILE],
+  openTabs: [STARTER_FILE, 'README.md'],
   activePath: STARTER_FILE,
-  stdin: 'Bytebox',
+  stdin: 'Ada',
   args: '',
 };
 
@@ -436,6 +439,27 @@ export function Playground({ slug }: Props) {
     }
   }
 
+  // Local workspace only: throw away the files in this browser and start from the welcome project
+  function resetWorkspace() {
+    if (!window.confirm('Start over with the welcome project? The files in this workspace will be replaced.')) return;
+    closeSubscription.current?.();
+    setWorkspace(STARTER_WORKSPACE);
+    setRun(null);
+    setError(null);
+    setMarkers([]);
+    setRunning(false);
+    setSelectedFolder('');
+  }
+
+  function restoreOldWorkspace() {
+    if (!window.confirm('Open your earlier workspace? It replaces the files in this workspace.')) return;
+    try {
+      setWorkspace({ ...STARTER_WORKSPACE, ...(JSON.parse(load(OLD_STORAGE_KEY) ?? '{}') as Workspace) });
+    } catch {
+      showNotice('The earlier workspace could not be read', true);
+    }
+  }
+
   // Replace in files (from the search panel)
   function replaceFiles(changed: Record<string, string>, count: number) {
     if (!canChange()) return;
@@ -526,6 +550,10 @@ export function Playground({ slug }: Props) {
       action('toggle-aside', `${hidden.aside ? 'Show' : 'Hide'} output panel`, () => togglePanel('aside'), '⌘J'),
     );
     if (!slug) commands.push(action('share', 'Share (save and get a link)', () => void share()));
+    if (!slug) commands.push(action('reset', 'Reset the workspace to the welcome project', resetWorkspace));
+    if (!slug && load(OLD_STORAGE_KEY)) {
+      commands.push(action('restore-old', 'Open the workspace saved before the welcome project', restoreOldWorkspace));
+    }
     if (slug && isOwner) {
       commands.push(
         action('save', 'Save', () => void saveChanges(), '⌘S'),
@@ -887,6 +915,11 @@ export function Playground({ slug }: Props) {
           {!slug && (
             <button onClick={share} disabled={busy} className={SECONDARY_BUTTON} title="Save and get a link">
               {busy ? 'Sharing…' : '↗ Share'}
+            </button>
+          )}
+          {!slug && (
+            <button onClick={resetWorkspace} className={SECONDARY_BUTTON} title="Start over with the welcome project">
+              ↺ Reset
             </button>
           )}
           {slug && isOwner && (

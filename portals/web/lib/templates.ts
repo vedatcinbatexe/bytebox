@@ -1,28 +1,36 @@
 import type { Project } from './project';
 
-// Shown the first time someone opens Bytebox
+// Shown the first time someone opens the playground: small, and explains itself
 export const STARTER_PROJECT: Project = {
   files: {
-    'main.py': `from utils.greet import greet
+    'main.py': `# 👋 Welcome to Bytebox!
+# Press ▶ Run (or ⌘/Ctrl + Enter) to run this program.
+# Its output appears on the right.
 
-name = input()
-print(greet(name))
-`,
-    'utils/greet.py': `def greet(name):
-    return f"Hello, {name}!"
-`,
-    'hello.js': `const name = require('fs').readFileSync(0, 'utf8').trim();
-console.log(\`Hello from JavaScript, \${name}!\`);
-`,
-    'hello.cpp': `#include <iostream>
-#include <string>
+name = input()  # reads the "Input (stdin)" box on the right
+print(f"Hello, {name}! 🎉")
 
-int main() {
-    std::string name;
-    std::getline(std::cin, name);
-    std::cout << "Hello from C++, " << name << "!" << std::endl;
-    return 0;
-}
+for step in ["Edit this code", "Run it", "Share the link"]:
+    print("✔", step)
+`,
+    'README.md': `# Bytebox
+
+Write, run and share code in your browser. No installs needed.
+
+## Try it
+
+1. Press **▶ Run** to run \`main.py\`.
+2. Change the name in **Input (stdin)** and run it again.
+3. Edit the code, or add files with **+ File** (\`.py\`, \`.js\`, \`.ts\`, \`.java\`, \`.cpp\`, \`.go\`, \`.rs\`, \`.html\`).
+
+## Good to know
+
+- Your code runs in a safe sandbox: no internet, a few seconds and some memory per run.
+- **Share** gives you a link others can open, run and fork.
+- **>_ Terminal** opens a real Linux shell with your files.
+- **⌘/Ctrl + K** finds any file or action.
+
+Press **↺ Reset** to start over with these two files.
 `,
   },
   folders: [],
