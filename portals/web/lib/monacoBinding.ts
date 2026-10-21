@@ -18,7 +18,8 @@ function updateCursorStyles(people: { clientId: number; name: string; color: str
     style.id = STYLE_ID;
     document.head.appendChild(style);
   }
-  style.textContent = people
+  // On the top visible line the name goes below the cursor, so it isn't cut off by the tab bar
+  style.textContent = `.yc-label-below::after { top: 1.35em !important; border-radius: 0 3px 3px 3px !important; }\n` + people
     .map(({ clientId, name, color }) => {
       const label = JSON.stringify(name.replace(/[^\w .@-]/g, '').slice(0, 30)); // safe inside CSS
       return `
@@ -90,8 +91,10 @@ export function bindEditor(
     }, origin);
   });
 
-  // Our cursor → everyone (relative positions follow the text as others type)
+  // Our cursor → everyone (relative positions follow the text as others type).
+  // Only while we're in the editor: click elsewhere and it disappears for the others.
   const shareCursor = () => {
+    if (!editor.hasTextFocus()) return;
     const selection = editor.getSelection();
     if (!selection) return;
     const anchor = model.getOffsetAt(selection.getStartPosition());
@@ -102,8 +105,13 @@ export function bindEditor(
       head: Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(text, head)),
     });
   };
+  const hideCursor = () => awareness.setLocalStateField('cursor', null);
   const selectionListener = editor.onDidChangeCursorSelection(shareCursor);
-  shareCursor();
+  const focusListener = editor.onDidFocusEditorText(shareCursor);
+  const blurListener = editor.onDidBlurEditorText(hideCursor);
+  awareness.setLocalStateField('file', path); // which file we have open, focused or not
+  if (editor.hasTextFocus()) shareCursor();
+  else hideCursor();
 
   // Everyone else's cursor in this file → decorations
   const decorations = editor.createDecorationsCollection();
@@ -111,6 +119,7 @@ export function bindEditor(
     const people: { clientId: number; name: string; color: string }[] = [];
     const ranges: Parameters<typeof decorations.set>[0][number][] = [];
     const myUserId = (awareness.getLocalState() as Partial<Presence> | null)?.user?.id;
+    const firstVisibleLine = editor.getVisibleRanges()[0]?.startLineNumber ?? 1;
     awareness.getStates().forEach((state, clientId) => {
       const presence = state as Partial<Presence>;
       // Only other people: not this tab, and not your own other tabs
@@ -131,19 +140,26 @@ export function bindEditor(
       }
       ranges.push({
         range: new monaco.Range(end.lineNumber, end.column, end.lineNumber, end.column),
-        options: { beforeContentClassName: `yc-cursor-${clientId}`, showIfCollapsed: true },
+        options: {
+          beforeContentClassName: `yc-cursor-${clientId}${end.lineNumber <= firstVisibleLine ? ' yc-label-below' : ''}`,
+          showIfCollapsed: true,
+        },
       });
     });
     updateCursorStyles(people);
     decorations.set(ranges);
   }
   awareness.on('change', renderCursors);
+  const scrollListener = editor.onDidScrollChange(renderCursors); // the top visible line may change
   renderCursors();
 
   return () => {
     text.unobserve(onTextChange);
     contentListener.dispose();
     selectionListener.dispose();
+    focusListener.dispose();
+    blurListener.dispose();
+    scrollListener.dispose();
     awareness.off('change', renderCursors);
     decorations.clear();
   };

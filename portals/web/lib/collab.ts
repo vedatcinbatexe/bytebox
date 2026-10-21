@@ -92,7 +92,8 @@ export function colorFor(userId: string): string {
 export interface Presence {
   user: { id: string; login: string; name: string; avatarUrl: string; color: string };
   // Open file and selection; positions are Yjs relative positions (JSON), so they move with edits
-  cursor?: { path: string; anchor: unknown; head: unknown } | null;
+  cursor?: { path: string; anchor: unknown; head: unknown } | null; // only while typing in the editor
+  file?: string | null; // the open file, even when not focused
 }
 
 export interface Person {
@@ -103,7 +104,7 @@ export interface Person {
 }
 
 // One entry per account (not per tab), you first, then by login.
-// For each account it keeps the tab with a cursor (for "which file"), and this tab for you.
+// For each account it keeps the tab with an open file (for "which file"), and this tab for you.
 export function distinctPeople(
   states: Map<number, Partial<Presence>>,
   myClientId: number,
@@ -117,7 +118,7 @@ export function distinctPeople(
     const better =
       !existing ||
       clientId === myClientId ||
-      (existing.clientId !== myClientId && !existing.presence.cursor && Boolean(presence.cursor));
+      (existing.clientId !== myClientId && !existing.presence.file && Boolean(presence.file));
     const tabs = (existing?.tabs ?? 0) + 1;
     if (better) byUser.set(presence.user.id, { clientId, presence, isMe: presence.user.id === myUserId, tabs });
     else existing.tabs = tabs;

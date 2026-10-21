@@ -78,7 +78,8 @@ export function CollaboratorsPanel(props: Props) {
         {people.length === 0 && <p className="text-subtle">Nobody is connected yet.</p>}
         <ul className="space-y-2">
           {people.map((person) => {
-            const { user, cursor } = person.presence;
+            const { user } = person.presence;
+            const file = person.presence.file ?? person.presence.cursor?.path;
             return (
               <li key={person.clientId} className="flex items-center gap-3 rounded-lg border border-line bg-app px-3 py-2">
                 <Avatar person={person} />
@@ -88,13 +89,13 @@ export function CollaboratorsPanel(props: Props) {
                     {person.isMe && <span className="text-muted"> (you)</span>}
                     {person.tabs > 1 && <span className="text-xs text-subtle"> · {person.tabs} tabs</span>}
                   </p>
-                  {cursor?.path ? (
+                  {file ? (
                     <button
-                      onClick={() => props.onOpenFile(cursor.path)}
+                      onClick={() => props.onOpenFile(file)}
                       className="truncate font-mono text-xs text-muted hover:text-accent"
                       title="Open this file"
                     >
-                      ✎ {cursor.path}
+                      ✎ {file}
                     </button>
                   ) : (
                     <p className="text-xs text-subtle">@{user.login}</p>

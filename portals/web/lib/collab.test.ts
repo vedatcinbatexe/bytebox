@@ -62,7 +62,7 @@ test('people are listed once per account, however many tabs they have open', () 
   const user = (id: string, login: string) => ({ id, login, name: login, avatarUrl: '', color: colorFor(id) });
   const states = new Map<number, Partial<Presence>>([
     [1, { user: user('u-bob', 'bob') }],
-    [2, { user: user('u-bob', 'bob'), cursor: { path: 'main.py', anchor: null, head: null } }],
+    [2, { user: user('u-bob', 'bob'), file: 'main.py' }],
     [3, { user: user('u-me', 'tester') }], // me, another tab
     [4, { user: user('u-me', 'tester') }], // me, this tab
     [5, {}], // connected but no user yet
@@ -72,7 +72,7 @@ test('people are listed once per account, however many tabs they have open', () 
     people.map((person) => [person.presence.user.login, person.clientId, person.tabs, person.isMe]),
     [
       ['tester', 4, 2, true],
-      ['bob', 2, 2, false], // the tab with a cursor, so we know which file bob is in
+      ['bob', 2, 2, false], // the tab with an open file, so we know which file bob is in
     ],
   );
 });

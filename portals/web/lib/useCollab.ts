@@ -106,6 +106,7 @@ export function useCollab({ slug, enabled, user, onRemote }: Options) {
         unbind();
         boundPath.current = null;
         live.provider.awareness.setLocalStateField('cursor', null);
+        live.provider.awareness.setLocalStateField('file', null);
       };
     },
   };
